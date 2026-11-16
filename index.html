@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Rides Web App</title>
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
+        #sidebar { width: 400px; padding: 20px; overflow-y: auto; background: #f8f9fa; border-right: 1px solid #ddd; }
+        #map { flex: 1; }
+        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        input, button { width: 100%; padding: 8px; margin: 5px 0 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        button:disabled { background: #9ca3af; cursor: not-allowed; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; background: #dbeafe; color: #1e40af; }
+        .hint { font-size: 12px; color: #555; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h2>Shared Rides</h2>
+
+    <div class="card">
+        <h3>Post a Shared Ride (Driver)</h3>
+        <p class="hint">Click on the map to set <b>Pickup</b>, then click again for <b>Drop-off</b>.</p>
+        <input type="text" id="driverName" placeholder="Your Name (Driver)" required>
+        <input type="text" id="originName" placeholder="Pickup Label (e.g., Central Station)" required>
+        <input type="text" id="destName" placeholder="Drop-off Label (e.g., Airport)" required>
+        <input type="number" id="seats" placeholder="Available Seats" value="3" min="1" max="6">
+        <div id="coordsDisplay" class="hint">No map points selected yet.</div>
+        <button onclick="createRide()">Publish Ride</button>
+    </div>
+
+    <h3>Available Shared Rides</h3>
+    <div id="ridesList">Loading rides...</div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com"></script>
+<script>
+    // Initialize Map centered on Varna, Bulgaria
+    const map = L.map('map').setView([43.2141, 27.9147], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let pickupCoords = null;
+    let dropoffCoords = null;
+    let tempMarkers = [];
+    let routeLayers = L.layerGroup().addTo(map);
+
+    // Handle map clicks to pick origin and destination
+    map.on('click', function(e) {
+        if (!pickupCoords || (pickupCoords && dropoffCoords)) {
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
+            pickupCoords = e.latlng;
+            dropoffCoords = null;
+            tempMarkers.push(L.marker(pickupCoords).addTo(map).bindPopup("Pickup").openPopup());
+            document.getElementById('coordsDisplay').innerText = `Pickup set (${pickupCoords.lat.toFixed(4)}, ${pickupCoords.lng.toFixed(4)}). Now click Drop-off.`;
+        } else {
+            dropoffCoords = e.latlng;
+            tempMarkers.push(L.marker(dropoffCoords).addTo(map).bindPopup("Drop-off").openPopup());
+            document.getElementById('coordsDisplay').innerText = `Route ready! Fill details and click Publish.`;
+        }
+    });
+
+    async function fetchRides() {
+        const res = await fetch('/api/rides');
+        const rides = await res.json();
+        const container = document.getElementById('ridesList');
+        container.innerHTML = '';
+        routeLayers.clearLayers();
+
+        if (rides.length === 0) {
+            container.innerHTML = '<p class="hint">No rides posted yet. Click the map to post one!</p>';
+            return;
+        }
+
+        rides.forEach(ride => {
+            // Draw route line on map
+            const line = L.polyline([
+                [ride.origin_lat, ride.origin_lng],
+                [ride.dest_lat, ride.dest_lng]
+            ], { color: ride.available_seats > 0 ? '#2563eb' : '#9ca3af', weight: 4 }).addTo(routeLayers);
+
+            const passengerNames = ride.passengers.map(p => `${p.name} (${p.seats})`).join(', ') || 'None yet';
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <strong>${ride.origin_name} &rarr; ${ride.dest_name}</strong><br>
+                <span class="badge">$${ride.price_per_seat} / seat</span>
+                <span class="badge">${ride.available_seats} seats left</span>
+                <p style="margin: 8px 0; font-size: 14px;">
+                    <b>Driver:</b> ${ride.driver_name}<br>
+                    <b>Co-riders:</b> ${passengerNames}
+                </p>
+                ${ride.available_seats > 0 ? `
+                    <input type="text" id="rider_${ride.id}" placeholder="Your Name to Join">
+                    <button onclick="bookRide(${ride.id})">Book 1 Seat</button>
+                ` : `<button disabled>Ride Full</button>`}
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    async function createRide() {
+        const driver_name = document.getElementById('driverName').value;
+        const origin_name = document.getElementById('originName').value;
+        const dest_name = document.getElementById('destName').value;
+        const available_seats = parseInt(document.getElementById('seats').value);
+
+        if (!driver_name || !origin_name || !dest_name || !pickupCoords || !dropoffCoords) {
+            alert("Please enter all fields and click both Pickup and Drop-off on the map.");
+            return;
+        }
+
+        await fetch('/api/rides', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                driver_name, origin_name, dest_name,
+                origin_lat: pickupCoords.lat,
+                origin_lng: pickupCoords.lng,
+                dest_lat: dropoffCoords.lat,
+                dest_lng: dropoffCoords.lng,
+                available_seats
+            })
+        });
+
+        tempMarkers.forEach(m => map.removeLayer(m));
+        pickupCoords = null;
+        dropoffCoords = null;
+        document.getElementById('coordsDisplay').innerText = "Ride published!";
+    }
+
+    async function bookRide(rideId) {
+        const riderInput = document.getElementById(`rider_${rideId}`);
+        const rider_name = riderInput.value.trim();
+        if (!rider_name) {
+            alert("Please enter your name to book a seat.");
+            return;
+        }
+
+        const res = await fetch(`/api/rides/${rideId}/book`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rider_name, seats_booked: 1 })
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            alert(err.detail);
+        }
+    }
+
+    // Real-time WebSocket updates
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.event === 'rides_updated') {
+            fetchRides();
+        }
+    };
+
+    // Initial load
+    fetchRides();
+</script>
+
+</body>
+</html>
