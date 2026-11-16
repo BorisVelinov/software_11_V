@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shared Rides Web App</title>
-    <link rel="stylesheet" href="https://unpkg.com" />
+    <!-- Fixes the favicon 404 console error -->
+    <link rel="icon" href="data:,">
+    <!-- Reliable jsDelivr CDN for Leaflet -->
+    <link rel="stylesheet" href="https://jsdelivr.net" />
     <style>
         body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
         #sidebar { width: 400px; padding: 20px; overflow-y: auto; background: #f8f9fa; border-right: 1px solid #ddd; }
-        #map { flex: 1; }
+        #map { flex: 1; background: #e5e7eb; }
         .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
         input, button { width: 100%; padding: 8px; margin: 5px 0 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
         button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
@@ -40,41 +43,52 @@
 
 <div id="map"></div>
 
-<script src="https://unpkg.com"></script>
+<!-- Load Leaflet JS synchronously before running inline script -->
+<script src="https://jsdelivr.net"></script>
 <script>
-    // Initialize Map centered on Varna, Bulgaria
-    const map = L.map('map').setView([43.2141, 27.9147], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
+    // Declare state variables first so functions never crash on ReferenceError
     let pickupCoords = null;
     let dropoffCoords = null;
     let tempMarkers = [];
-    let routeLayers = L.layerGroup().addTo(map);
+    let map = null;
+    let routeLayers = null;
 
-    // Handle map clicks to pick origin and destination
-    map.on('click', function(e) {
-        if (!pickupCoords || (pickupCoords && dropoffCoords)) {
-            tempMarkers.forEach(m => map.removeLayer(m));
-            tempMarkers = [];
-            pickupCoords = e.latlng;
-            dropoffCoords = null;
-            tempMarkers.push(L.marker(pickupCoords).addTo(map).bindPopup("Pickup").openPopup());
-            document.getElementById('coordsDisplay').innerText = `Pickup set (${pickupCoords.lat.toFixed(4)}, ${pickupCoords.lng.toFixed(4)}). Now click Drop-off.`;
-        } else {
-            dropoffCoords = e.latlng;
-            tempMarkers.push(L.marker(dropoffCoords).addTo(map).bindPopup("Drop-off").openPopup());
-            document.getElementById('coordsDisplay').innerText = `Route ready! Fill details and click Publish.`;
-        }
-    });
+    // Verify Leaflet loaded properly
+    if (typeof L === 'undefined') {
+        document.getElementById('map').innerHTML =
+            '<p style="padding:20px; color:red;"><b>Error:</b> Map library failed to load. Check your internet connection or ad-blocker.</p>';
+    } else {
+        map = L.map('map').setView([43.2141, 27.9147], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        routeLayers = L.layerGroup().addTo(map);
+
+        map.on('click', function(e) {
+            if (!pickupCoords || (pickupCoords && dropoffCoords)) {
+                tempMarkers.forEach(m => map.removeLayer(m));
+                tempMarkers = [];
+                pickupCoords = e.latlng;
+                dropoffCoords = null;
+                tempMarkers.push(L.marker(pickupCoords).addTo(map).bindPopup("Pickup").openPopup());
+                document.getElementById('coordsDisplay').innerText =
+                    `Pickup set (${pickupCoords.lat.toFixed(4)}, ${pickupCoords.lng.toFixed(4)}). Now click Drop-off.`;
+            } else {
+                dropoffCoords = e.latlng;
+                tempMarkers.push(L.marker(dropoffCoords).addTo(map).bindPopup("Drop-off").openPopup());
+                document.getElementById('coordsDisplay').innerText =
+                    `Route ready! Fill details and click Publish.`;
+            }
+        });
+    }
 
     async function fetchRides() {
         const res = await fetch('/api/rides');
         const rides = await res.json();
         const container = document.getElementById('ridesList');
         container.innerHTML = '';
-        routeLayers.clearLayers();
+        if (routeLayers) routeLayers.clearLayers();
 
         if (rides.length === 0) {
             container.innerHTML = '<p class="hint">No rides posted yet. Click the map to post one!</p>';
@@ -82,11 +96,12 @@
         }
 
         rides.forEach(ride => {
-            // Draw route line on map
-            const line = L.polyline([
-                [ride.origin_lat, ride.origin_lng],
-                [ride.dest_lat, ride.dest_lng]
-            ], { color: ride.available_seats > 0 ? '#2563eb' : '#9ca3af', weight: 4 }).addTo(routeLayers);
+            if (routeLayers) {
+                L.polyline([
+                    [ride.origin_lat, ride.origin_lng],
+                    [ride.dest_lat, ride.dest_lng]
+                ], { color: ride.available_seats > 0 ? '#2563eb' : '#9ca3af', weight: 4 }).addTo(routeLayers);
+            }
 
             const passengerNames = ride.passengers.map(p => `${p.name} (${p.seats})`).join(', ') || 'None yet';
 
@@ -133,7 +148,7 @@
             })
         });
 
-        tempMarkers.forEach(m => map.removeLayer(m));
+        if (map) tempMarkers.forEach(m => map.removeLayer(m));
         pickupCoords = null;
         dropoffCoords = null;
         document.getElementById('coordsDisplay').innerText = "Ride published!";
@@ -159,7 +174,6 @@
         }
     }
 
-    // Real-time WebSocket updates
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
     ws.onmessage = (event) => {
@@ -169,7 +183,6 @@
         }
     };
 
-    // Initial load
     fetchRides();
 </script>
 
