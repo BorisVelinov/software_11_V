@@ -1,86 +1,295 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="bg">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shared Rides Web App</title>
-    <!-- Fixes the favicon 404 console error -->
+    <title>Споделени Пътувания</title>
     <link rel="icon" href="data:,">
-    <!-- Reliable jsDelivr CDN for Leaflet -->
-    <link rel="stylesheet" href="https://jsdelivr.net" />
+    <!-- Loaded directly from your FastAPI server -->
+    <script src="/static/leaflet-global.js"></script>
     <style>
-        body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
-        #sidebar { width: 400px; padding: 20px; overflow-y: auto; background: #f8f9fa; border-right: 1px solid #ddd; }
-        #map { flex: 1; background: #e5e7eb; }
-        .card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        input, button { width: 100%; padding: 8px; margin: 5px 0 10px; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
-        button { background: #2563eb; color: white; border: none; font-weight: bold; cursor: pointer; }
-        button:hover { background: #1d4ed8; }
-        button:disabled { background: #9ca3af; cursor: not-allowed; }
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; background: #dbeafe; color: #1e40af; }
-        .hint { font-size: 12px; color: #555; margin-bottom: 10px; }
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --border-color: #e5e7eb;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+        }
+
+        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background-color: var(--bg-color); color: var(--text-main); }
+        
+        #sidebar { width: 420px; display: flex; flex-direction: column; background: var(--bg-color); border-right: 1px solid var(--border-color); z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
+        .sidebar-header { padding: 20px; background: white; border-bottom: 1px solid var(--border-color); }
+        .sidebar-header h2 { margin: 0; color: var(--primary); font-size: 24px; display: flex; align-items: center; gap: 8px; }
+        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; }
+
+        #map { flex: 1; background: #e5e7eb; position: relative; overflow: hidden; }
+        
+        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); margin-bottom: 20px; border: 1px solid var(--border-color); }
+        .card h3 { margin-top: 0; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid var(--bg-color); padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
+        
+        input { width: 100%; padding: 10px 12px; margin: 0; box-sizing: border-box; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; transition: border-color 0.2s; }
+        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        input.error-input { border-color: var(--error-color); background-color: #fef2f2; }
+        
+        .error-msg { color: var(--error-color); font-size: 12px; margin-top: 4px; display: none; }
+        
+        button { width: 100%; padding: 12px; margin-top: 5px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
+        
+        .search-container { display: flex; gap: 8px; margin-bottom: 15px; }
+        .search-container input { flex: 1; }
+        .search-container button { width: auto; padding: 10px 15px; margin: 0; background: #4b5563; color: white; }
+        .search-container button:hover { background: #374151; }
+
+        .row { display: flex; gap: 15px; }
+        .row .form-group { flex: 1; }
+
+        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-price { background: #dbeafe; color: #1e40af; }
+        .badge-seats { background: #dcfce7; color: #166534; }
+        
+        .hint { font-size: 13px; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4; }
+        .success-msg { display: none; padding: 10px; background: #dcfce7; color: #166534; border-radius: 8px; margin-bottom: 15px; font-size: 14px; text-align: center; }
+
+        .ride-card { position: relative; }
+        .ride-header { font-size: 16px; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
+        .ride-details { font-size: 14px; margin: 12px 0; color: #4b5563; line-height: 1.6; }
+        
+        /* Popup Buttons */
+        .btn-yes { background: var(--success-color) !important; color: white; padding: 6px 12px !important; margin-right: 5px !important; width: auto !important; display: inline-block !important; }
+        .btn-no { background: var(--error-color) !important; color: white; padding: 6px 12px !important; width: auto !important; display: inline-block !important; }
+
+        /* Embedded Leaflet 2.0 Layout CSS */
+        .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer { position: absolute; left: 0; top: 0; }
+        .leaflet-container { overflow: hidden; font-family: "Helvetica Neue", Arial, Helvetica, sans-serif; font-size: 12px; background: #ddd; outline: 0; touch-action: none; }
+        .leaflet-tile { user-select: none; -webkit-user-drag: none; }
+        .leaflet-tile-pane { z-index: 200; } .leaflet-overlay-pane { z-index: 400; } .leaflet-shadow-pane { z-index: 500; } .leaflet-marker-pane { z-index: 600; } .leaflet-tooltip-pane { z-index: 650; } .leaflet-popup-pane { z-index: 700; }
+        .leaflet-control-container { position: relative; z-index: 800; pointer-events: none; }
+        .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
+        .leaflet-top { top: 10px; } .leaflet-bottom { bottom: 10px; } .leaflet-left { left: 10px; } .leaflet-right { right: 10px; }
+        .leaflet-control { pointer-events: auto; position: relative; z-index: 800; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .leaflet-bar a { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; text-decoration: none; color: black; border-bottom: 1px solid #eee; }
+        .leaflet-bar a:hover { background-color: #f9fafb; }
+        .leaflet-control-attribution { padding: 4px 8px; background: rgba(255, 255, 255, 0.9); font-size: 11px; box-shadow: none; border-radius: 4px; }
+        .leaflet-popup { position: absolute; text-align: center; margin-bottom: 20px; }
+        .leaflet-popup-content-wrapper { padding: 4px; text-align: left; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        .leaflet-popup-content { margin: 12px 16px; line-height: 1.4; text-align: center; }
+        .leaflet-popup-close-button { position: absolute; top: 8px; right: 10px; text-decoration: none; color: #9ca3af; font-size: 18px; font-weight: bold; }
+        .leaflet-grab { cursor: grab; } .leaflet-dragging .leaflet-grab { cursor: grabbing; }
     </style>
 </head>
 <body>
 
 <div id="sidebar">
-    <h2>Shared Rides</h2>
-
-    <div class="card">
-        <h3>Post a Shared Ride (Driver)</h3>
-        <p class="hint">Click on the map to set <b>Pickup</b>, then click again for <b>Drop-off</b>.</p>
-        <input type="text" id="driverName" placeholder="Your Name (Driver)" required>
-        <input type="text" id="originName" placeholder="Pickup Label (e.g., Central Station)" required>
-        <input type="text" id="destName" placeholder="Drop-off Label (e.g., Airport)" required>
-        <input type="number" id="seats" placeholder="Available Seats" value="3" min="1" max="6">
-        <div id="coordsDisplay" class="hint">No map points selected yet.</div>
-        <button onclick="createRide()">Publish Ride</button>
+    <div class="sidebar-header">
+        <h2>🚗 Споделени Пътувания</h2>
     </div>
+    
+    <div class="sidebar-content">
+        <div class="card">
+            <h3>Създай пътуване</h3>
+            <p class="hint">Потърси адрес или кликни директно върху картата.</p>
+            
+            <div class="search-container">
+                <input type="text" id="searchInput" placeholder="Търси адрес на картата...">
+                <button onclick="searchAddress()">🔍</button>
+            </div>
 
-    <h3>Available Shared Rides</h3>
-    <div id="ridesList">Loading rides...</div>
+            <div id="successMsg" class="success-msg">Пътуването е публикувано успешно!</div>
+
+            <div class="form-group">
+                <label>Име на шофьора</label>
+                <input type="text" id="driverName" placeholder="Въведи твоето име">
+                <div class="error-msg" id="err-driverName">Моля, въведи име.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Точка на качване</label>
+                <input type="text" id="originName" placeholder="Избери от картата..." readonly style="background:#f9fafb; cursor:pointer;" onclick="focusMap()">
+                <div class="error-msg" id="err-originName">Моля, избери начална точка от картата.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Точка на слизане</label>
+                <input type="text" id="destName" placeholder="Избери от картата..." readonly style="background:#f9fafb; cursor:pointer;" onclick="focusMap()">
+                <div class="error-msg" id="err-destName">Моля, избери крайна точка от картата.</div>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>Свободни места</label>
+                    <input type="number" id="seats" value="3" min="1" max="6">
+                </div>
+                <div class="form-group">
+                    <label>Цена на място (лв.)</label>
+                    <input type="number" id="price" placeholder="Напр. 5.00" min="0" step="0.5">
+                    <div class="error-msg" id="err-price">Въведи валидна цена.</div>
+                </div>
+            </div>
+
+            <button class="btn-primary" onclick="createRide()">Публикувай пътуване</button>
+        </div>
+
+        <div style="margin-bottom: 10px; font-weight: bold; font-size: 18px; padding-left: 5px;">Налични пътувания</div>
+        <div id="ridesList">Зареждане...</div>
+    </div>
 </div>
 
 <div id="map"></div>
 
-<!-- Load Leaflet JS synchronously before running inline script -->
-<script src="https://jsdelivr.net"></script>
 <script>
-    // Declare state variables first so functions never crash on ReferenceError
     let pickupCoords = null;
     let dropoffCoords = null;
     let tempMarkers = [];
+    let pendingMarker = null;
+    let pendingLocationData = null; 
     let map = null;
     let routeLayers = null;
 
-    // Verify Leaflet loaded properly
+    function createPinIcon(color) {
+        return new L.DivIcon({
+            html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.4);"></div>`,
+            className: '', iconSize: [26, 26], iconAnchor: [13, 13]
+        });
+    }
+
+    function focusMap() {
+        document.getElementById('searchInput').focus();
+    }
+
+    function clearErrors() {
+        document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
+        document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
+        document.getElementById('successMsg').style.display = 'none';
+    }
+
+    function showError(inputId, errorId) {
+        if(inputId) document.getElementById(inputId).classList.add('error-input');
+        if(errorId) document.getElementById(errorId).style.display = 'block';
+    }
+
+    async function getAddressFromCoords(lat, lng) {
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const data = await res.json();
+            if (data && data.address) {
+                const a = data.address;
+                const street = a.road || a.pedestrian || a.path || "";
+                const number = a.house_number || "";
+                const neighborhood = a.suburb || a.quarter || "";
+                const city = a.city || a.town || a.village || "";
+                
+                let mainPart = street;
+                if (street && number) mainPart = `${street} ${number}`;
+                else if (!street && neighborhood) mainPart = neighborhood;
+                
+                if (mainPart && city) return `${mainPart}, ${city}`;
+                if (mainPart) return mainPart;
+                if (city) return city;
+                return data.display_name.split(",").slice(0, 2).join(",");
+            }
+            return "Избрана локация";
+        } catch (error) { return "Избрана локация"; }
+    }
+
+    async function searchAddress() {
+        const query = document.getElementById('searchInput').value;
+        if (!query) return;
+        
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=bg&limit=1`);
+        const data = await res.json();
+        
+        if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lng = parseFloat(data[0].lon);
+            const shortAddress = data[0].display_name.split(",").slice(0, 2).join(",");
+            
+            map.flyTo([lat, lng], 17);
+            handleLocationSelection(lat, lng, shortAddress);
+        } else {
+            alert("Адресът не е намерен.");
+        }
+    }
+
+    function handleLocationSelection(lat, lng, fetchedAddress = null) {
+        if (pendingMarker) map.removeLayer(pendingMarker);
+        
+        pendingMarker = new L.Marker([lat, lng], { icon: createPinIcon('#eab308') }).addTo(map);
+        
+        const processAddress = async () => {
+            let address = fetchedAddress;
+            if (!address) {
+                pendingMarker.bindPopup("Зареждане...").openPopup();
+                address = await getAddressFromCoords(lat, lng);
+            }
+            pendingLocationData = { lat, lng, address };
+            const popupContent = `
+                <div style="font-size:14px; margin-bottom:8px;"><b>${address}</b></div>
+                <div style="margin-bottom:10px; color:#555;">Потвърждаваш ли локацията?</div>
+                <button class="btn-yes" onclick="window.confirmLocation()">Да</button>
+                <button class="btn-no" onclick="window.cancelLocation()">Не</button>
+            `;
+            pendingMarker.bindPopup(popupContent).openPopup();
+        };
+        processAddress();
+    }
+
+    window.confirmLocation = function() {
+        if (!pendingLocationData) return;
+        const { lat, lng, address } = pendingLocationData;
+        map.closePopup();
+        if (pendingMarker) map.removeLayer(pendingMarker);
+        pendingMarker = null;
+
+        clearErrors(); // Clear validation errors if user fixes the map issue
+
+        if (!pickupCoords || (pickupCoords && dropoffCoords)) {
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
+            pickupCoords = { lat, lng };
+            dropoffCoords = null;
+            
+            const marker = new L.Marker([lat, lng], { icon: createPinIcon('#10b981') }).addTo(map)
+                .bindPopup(`🟢 Качване:<br><b>${address}</b>`).openPopup();
+            tempMarkers.push(marker);
+            
+            document.getElementById('originName').value = address;
+        } else {
+            dropoffCoords = { lat, lng };
+            
+            const marker = new L.Marker([lat, lng], { icon: createPinIcon('#ef4444') }).addTo(map)
+                .bindPopup(`🔴 Слизане:<br><b>${address}</b>`).openPopup();
+            tempMarkers.push(marker);
+            
+            document.getElementById('destName').value = address;
+        }
+        document.getElementById('searchInput').value = ''; 
+    };
+
+    window.cancelLocation = function() {
+        if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+        pendingLocationData = null;
+    };
+
     if (typeof L === 'undefined') {
-        document.getElementById('map').innerHTML =
-            '<p style="padding:20px; color:red;"><b>Error:</b> Map library failed to load. Check your internet connection or ad-blocker.</p>';
+        document.getElementById('map').innerHTML = '<p style="padding:20px; color:red;"><b>Грешка:</b> Leaflet не е зареден.</p>';
     } else {
-        map = L.map('map').setView([43.2141, 27.9147], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        map = new L.Map('map').setView([43.2141, 27.9147], 14);
+        new L.TileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
-
-        routeLayers = L.layerGroup().addTo(map);
-
-        map.on('click', function(e) {
-            if (!pickupCoords || (pickupCoords && dropoffCoords)) {
-                tempMarkers.forEach(m => map.removeLayer(m));
-                tempMarkers = [];
-                pickupCoords = e.latlng;
-                dropoffCoords = null;
-                tempMarkers.push(L.marker(pickupCoords).addTo(map).bindPopup("Pickup").openPopup());
-                document.getElementById('coordsDisplay').innerText =
-                    `Pickup set (${pickupCoords.lat.toFixed(4)}, ${pickupCoords.lng.toFixed(4)}). Now click Drop-off.`;
-            } else {
-                dropoffCoords = e.latlng;
-                tempMarkers.push(L.marker(dropoffCoords).addTo(map).bindPopup("Drop-off").openPopup());
-                document.getElementById('coordsDisplay').innerText =
-                    `Route ready! Fill details and click Publish.`;
-            }
-        });
+        routeLayers = new L.LayerGroup().addTo(map);
+        map.on('click', function (e) { handleLocationSelection(e.latlng.lat, e.latlng.lng); });
     }
 
     async function fetchRides() {
@@ -91,74 +300,99 @@
         if (routeLayers) routeLayers.clearLayers();
 
         if (rides.length === 0) {
-            container.innerHTML = '<p class="hint">No rides posted yet. Click the map to post one!</p>';
+            container.innerHTML = '<p class="hint">Все още няма публикувани пътувания.</p>';
             return;
         }
 
-        rides.forEach(ride => {
+        for (const ride of rides) {
             if (routeLayers) {
-                L.polyline([
-                    [ride.origin_lat, ride.origin_lng],
-                    [ride.dest_lat, ride.dest_lng]
-                ], { color: ride.available_seats > 0 ? '#2563eb' : '#9ca3af', weight: 4 }).addTo(routeLayers);
+                const routeColor = ride.available_seats > 0 ? '#3b82f6' : '#9ca3af';
+                try {
+                    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${ride.origin_lng},${ride.origin_lat};${ride.dest_lng},${ride.dest_lat}?overview=full&geometries=geojson`;
+                    const routeRes = await fetch(osrmUrl);
+                    const routeData = await routeRes.json();
+                    if (routeData.routes && routeData.routes.length > 0) {
+                        const coords = routeData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                        new L.Polyline(coords, { color: routeColor, weight: 5, opacity: 0.8 }).addTo(routeLayers);
+                    } else throw new Error("No route");
+                } catch (err) {
+                    new L.Polyline([ [ride.origin_lat, ride.origin_lng], [ride.dest_lat, ride.dest_lng] ], { color: routeColor, weight: 4, dashArray: '5, 10' }).addTo(routeLayers);
+                }
             }
 
-            const passengerNames = ride.passengers.map(p => `${p.name} (${p.seats})`).join(', ') || 'None yet';
+            const passengerNames = ride.passengers.map(p => `${p.name} (${p.seats})`).join(', ') || 'Няма';
 
             const card = document.createElement('div');
-            card.className = 'card';
+            card.className = 'card ride-card';
             card.innerHTML = `
-                <strong>${ride.origin_name} &rarr; ${ride.dest_name}</strong><br>
-                <span class="badge">$${ride.price_per_seat} / seat</span>
-                <span class="badge">${ride.available_seats} seats left</span>
-                <p style="margin: 8px 0; font-size: 14px;">
-                    <b>Driver:</b> ${ride.driver_name}<br>
-                    <b>Co-riders:</b> ${passengerNames}
-                </p>
+                <div class="ride-header">📍 ${ride.origin_name} <br>🏁 ${ride.dest_name}</div>
+                <div style="margin-bottom: 10px;">
+                    <span class="badge badge-price">💵 ${parseFloat(ride.price_per_seat).toFixed(2)} лв. / място</span>
+                    <span class="badge badge-seats">💺 ${ride.available_seats} свободни</span>
+                </div>
+                <div class="ride-details">
+                    👤 <b>Шофьор:</b> ${ride.driver_name}<br>
+                    👥 <b>Пътници:</b> ${passengerNames}
+                </div>
                 ${ride.available_seats > 0 ? `
-                    <input type="text" id="rider_${ride.id}" placeholder="Your Name to Join">
-                    <button onclick="bookRide(${ride.id})">Book 1 Seat</button>
-                ` : `<button disabled>Ride Full</button>`}
+                    <div style="margin-top: 15px;">
+                        <input type="text" id="rider_${ride.id}" placeholder="Твоето име за резервация">
+                        <div class="error-msg" id="err-rider_${ride.id}">Въведи име за резервация.</div>
+                        <button class="btn-primary" onclick="bookRide(${ride.id})">Резервирай 1 място</button>
+                    </div>
+                ` : `<button disabled>Няма свободни места</button>`}
             `;
             container.appendChild(card);
-        });
+        }
     }
 
     async function createRide() {
-        const driver_name = document.getElementById('driverName').value;
-        const origin_name = document.getElementById('originName').value;
-        const dest_name = document.getElementById('destName').value;
-        const available_seats = parseInt(document.getElementById('seats').value);
+        clearErrors();
+        let isValid = true;
 
-        if (!driver_name || !origin_name || !dest_name || !pickupCoords || !dropoffCoords) {
-            alert("Please enter all fields and click both Pickup and Drop-off on the map.");
-            return;
-        }
+        const driver_name = document.getElementById('driverName').value.trim();
+        const available_seats = parseInt(document.getElementById('seats').value);
+        const priceText = document.getElementById('price').value;
+        const price_per_seat = parseFloat(priceText);
+
+        if (!driver_name) { showError('driverName', 'err-driverName'); isValid = false; }
+        if (!pickupCoords) { showError('originName', 'err-originName'); isValid = false; }
+        if (!dropoffCoords) { showError('destName', 'err-destName'); isValid = false; }
+        if (isNaN(price_per_seat) || price_per_seat < 0 || priceText === "") { showError('price', 'err-price'); isValid = false; }
+
+        if (!isValid) return;
 
         await fetch('/api/rides', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                driver_name, origin_name, dest_name,
-                origin_lat: pickupCoords.lat,
-                origin_lng: pickupCoords.lng,
-                dest_lat: dropoffCoords.lat,
-                dest_lng: dropoffCoords.lng,
-                available_seats
+                driver_name, 
+                origin_name: document.getElementById('originName').value, 
+                dest_name: document.getElementById('destName').value,
+                origin_lat: pickupCoords.lat, origin_lng: pickupCoords.lng,
+                dest_lat: dropoffCoords.lat, dest_lng: dropoffCoords.lng,
+                available_seats, price_per_seat
             })
         });
 
         if (map) tempMarkers.forEach(m => map.removeLayer(m));
-        pickupCoords = null;
-        dropoffCoords = null;
-        document.getElementById('coordsDisplay').innerText = "Ride published!";
+        tempMarkers = []; pickupCoords = null; dropoffCoords = null;
+        
+        document.getElementById('originName').value = '';
+        document.getElementById('destName').value = '';
+        document.getElementById('price').value = '';
+        document.getElementById('successMsg').style.display = 'block';
+        
+        setTimeout(() => { document.getElementById('successMsg').style.display = 'none'; }, 4000);
     }
 
     async function bookRide(rideId) {
+        clearErrors();
         const riderInput = document.getElementById(`rider_${rideId}`);
         const rider_name = riderInput.value.trim();
+        
         if (!rider_name) {
-            alert("Please enter your name to book a seat.");
+            showError(`rider_${rideId}`, `err-rider_${rideId}`);
             return;
         }
 
@@ -170,7 +404,7 @@
 
         if (!res.ok) {
             const err = await res.json();
-            alert(err.detail);
+            alert(err.detail); // Пазим alert тук само за системни грешки от сървъра (напр. ако местата са се изчерпали докато цъкаш)
         }
     }
 
@@ -178,13 +412,9 @@
     const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.event === 'rides_updated') {
-            fetchRides();
-        }
+        if (data.event === 'rides_updated') fetchRides();
     };
-
     fetchRides();
 </script>
-
 </body>
 </html>

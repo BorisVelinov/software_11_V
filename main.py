@@ -1,9 +1,11 @@
 import math
-from typing import List, Dict
+import os
+from typing import List
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 
@@ -14,12 +16,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # --- DATABASE MODELS ---
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    role = Column(String, default="rider")  # "driver" or "rider"
-
 class Ride(Base):
     __tablename__ = "rides"
     id = Column(Integer, primary_key=True, index=True)
@@ -32,7 +28,7 @@ class Ride(Base):
     dest_lng = Column(Float, nullable=False)
     available_seats = Column(Integer, nullable=False)
     price_per_seat = Column(Float, nullable=False)
-    status = Column(String, default="open")  # "open", "full", "completed"
+    status = Column(String, default="open")
 
     bookings = relationship("Booking", back_populates="ride")
 
@@ -56,26 +52,12 @@ class RideCreate(BaseModel):
     origin_lng: float
     dest_lat: float
     dest_lng: float
-    available_seats: int
+    available_seats: int = Field(..., ge=1, le=8)
+    price_per_seat: float = Field(..., ge=0)  # ДОБАВЕНО: Ръчна цена
 
 class BookingCreate(BaseModel):
     rider_name: str
-    seats_booked: int = 1
-
-# --- HELPER FUNCTIONS ---
-def calculate_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate Haversine distance in kilometers between two GPS points."""
-    R = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (
-        math.sin(dlat / 2) ** 2
-        + math.cos(math.radians(lat1))
-        * math.cos(math.radians(lat2))
-        * math.sin(dlon / 2) ** 2
-    )
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return round(R * c, 2)
+    seats_booked: int = Field(default=1, ge=1)
 
 # --- WEBSOCKET MANAGER ---
 class ConnectionManager:
@@ -87,16 +69,25 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
+        dead_connections = []
         for connection in self.active_connections:
-            await connection.send_json(message)
+            try:
+                await connection.send_json(message)
+            except Exception:
+                dead_connections.append(connection)
+        for conn in dead_connections:
+            self.disconnect(conn)
 
 manager = ConnectionManager()
 
 # --- FASTAPI APP ---
 app = FastAPI(title="Shared Rides MVP")
+os.makedirs("static", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -141,13 +132,6 @@ def list_rides(db: Session = Depends(get_db)):
 
 @app.post("/api/rides")
 async def create_ride(ride_data: RideCreate, db: Session = Depends(get_db)):
-    distance = calculate_distance_km(
-        ride_data.origin_lat, ride_data.origin_lng,
-        ride_data.dest_lat, ride_data.dest_lng
-    )
-    # Base fare $2.00 + $0.50 per km split per seat
-    price_per_seat = round(2.0 + (distance * 0.50), 2)
-
     new_ride = Ride(
         driver_name=ride_data.driver_name,
         origin_name=ride_data.origin_name,
@@ -157,14 +141,14 @@ async def create_ride(ride_data: RideCreate, db: Session = Depends(get_db)):
         dest_lat=ride_data.dest_lat,
         dest_lng=ride_data.dest_lng,
         available_seats=ride_data.available_seats,
-        price_per_seat=price_per_seat,
+        price_per_seat=ride_data.price_per_seat, # Използваме зададената цена
     )
     db.add(new_ride)
     db.commit()
     db.refresh(new_ride)
 
     await manager.broadcast({"event": "rides_updated"})
-    return {"message": "Ride created", "ride_id": new_ride.id, "price_per_seat": price_per_seat}
+    return {"message": "Ride created", "ride_id": new_ride.id}
 
 @app.post("/api/rides/{ride_id}/book")
 async def book_seat(ride_id: int, booking: BookingCreate, db: Session = Depends(get_db)):
