@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Споделени Пътувания</title>
     <link rel="icon" href="data:,">
-    <!-- Loaded directly from your FastAPI server -->
     <script src="/static/leaflet-global.js"></script>
     <style>
         :root {
@@ -18,58 +17,296 @@
             --border-color: #e5e7eb;
             --error-color: #ef4444;
             --success-color: #10b981;
+            --warn-color: #f59e0b;
         }
 
-        body { font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; display: flex; height: 100vh; background-color: var(--bg-color); color: var(--text-main); }
-        
-        #sidebar { width: 420px; display: flex; flex-direction: column; background: var(--bg-color); border-right: 1px solid var(--border-color); z-index: 1000; box-shadow: 2px 0 10px rgba(0,0,0,0.05); }
-        .sidebar-header { padding: 20px; background: white; border-bottom: 1px solid var(--border-color); }
-        .sidebar-header h2 { margin: 0; color: var(--primary); font-size: 24px; display: flex; align-items: center; gap: 8px; }
-        .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; }
+        * { box-sizing: border-box; }
 
-        #map { flex: 1; background: #e5e7eb; position: relative; overflow: hidden; }
-        
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); margin-bottom: 20px; border: 1px solid var(--border-color); }
-        .card h3 { margin-top: 0; font-size: 18px; margin-bottom: 15px; border-bottom: 2px solid var(--bg-color); padding-bottom: 10px; }
-        
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; color: var(--text-muted); }
-        
-        input { width: 100%; padding: 10px 12px; margin: 0; box-sizing: border-box; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; transition: border-color 0.2s; }
-        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        input.error-input { border-color: var(--error-color); background-color: #fef2f2; }
-        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
+        }
+
+        /* Top Navigation Bar */
+        .topbar {
+            height: 58px;
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px;
+            z-index: 2000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            gap: 12px;
+        }
+
+        .brand {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .nav-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+        .nav-btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover { background: #f3f4f6; }
+        .nav-btn.active {
+            background: #eff6ff;
+            color: var(--primary);
+            border-color: #bfdbfe;
+        }
+
+        .topbar-right { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+
+        .btn-add-top {
+            background: var(--success-color);
+            color: #fff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .btn-add-top:hover { background: #059669; }
+
+        .user-pill {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #f3f4f6;
+            color: var(--text-main);
+            cursor: pointer;
+        }
+
+        .workspace {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            height: calc(100vh - 58px);
+        }
+
+        /* Page 1: Home (Full Map + Floating Drawer) */
+        #homePage {
+            display: none;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #homePage.active { display: block; }
+
+        #map {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            background: #dce3ea;
+            z-index: 1;
+        }
+
+        .map-drawer {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 390px;
+            max-width: calc(100vw - 32px);
+            max-height: calc(100% - 32px);
+            background: rgba(255, 255, 255, 0.96);
+            backdrop-filter: blur(8px);
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
+            border: 1px solid var(--border-color);
+            z-index: 1100;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .drawer-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-header h3 { margin: 0; font-size: 16px; }
+        .drawer-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
+
+        /* Pages 2..5 */
+        .page-view {
+            display: none;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 24px;
+            background: var(--bg-color);
+        }
+
+        .page-view.active { display: block; }
+        .container-narrow { max-width: 980px; margin: 0 auto; }
+
+        .card {
+            background: var(--card-bg);
+            padding: 18px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+        .card h3 { margin: 0 0 12px 0; font-size: 17px; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--text-muted); }
+
+        input, select {
+            width: 100%;
+            padding: 9px 11px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            font-size: 14px;
+            background: #fff;
+        }
+
+        input.error-input { border-color: var(--error-color); background: #fef2f2; }
         .error-msg { color: var(--error-color); font-size: 12px; margin-top: 4px; display: none; }
-        
-        button { width: 100%; padding: 12px; margin-top: 5px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
-        button:disabled { background: #9ca3af; cursor: not-allowed; transform: none; }
-        
-        .search-container { display: flex; gap: 8px; margin-bottom: 15px; }
-        .search-container input { flex: 1; }
-        .search-container button { width: auto; padding: 10px 15px; margin: 0; background: #4b5563; color: white; }
-        .search-container button:hover { background: #374151; }
 
-        .row { display: flex; gap: 15px; }
-        .row .form-group { flex: 1; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .row > * { flex: 1; min-width: 160px; }
 
-        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        button.btn {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #e5e7eb; color: var(--text-main); }
+        .btn-danger { background: var(--error-color); color: #fff; }
+        .btn-success { background: var(--success-color); color: #fff; }
+        .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 9px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            margin-right: 6px;
+        }
+
         .badge-price { background: #dbeafe; color: #1e40af; }
         .badge-seats { background: #dcfce7; color: #166534; }
-        
-        .hint { font-size: 13px; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4; }
-        .success-msg { display: none; padding: 10px; background: #dcfce7; color: #166534; border-radius: 8px; margin-bottom: 15px; font-size: 14px; text-align: center; }
+        .badge-warn { background: #fef3c7; color: #92400e; }
 
-        .ride-card { position: relative; }
-        .ride-header { font-size: 16px; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
-        .ride-details { font-size: 14px; margin: 12px 0; color: #4b5563; line-height: 1.6; }
-        
-        /* Popup Buttons */
-        .btn-yes { background: var(--success-color) !important; color: white; padding: 6px 12px !important; margin-right: 5px !important; width: auto !important; display: inline-block !important; }
-        .btn-no { background: var(--error-color) !important; color: white; padding: 6px 12px !important; width: auto !important; display: inline-block !important; }
+        .ride-item {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px;
+            background: #fff;
+            margin-bottom: 12px;
+        }
 
-        /* Embedded Leaflet 2.0 Layout CSS */
+        .ride-route { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+        .ride-meta { font-size: 13px; color: var(--text-muted); margin: 8px 0; line-height: 1.5; }
+        .hint { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+
+        .segment-box {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        .auth-notice {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            color: #92400e;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        /* Pop-up Map Inspector Modal */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .modal-backdrop.open { display: flex; }
+
+        .modal-card {
+            background: #fff;
+            border-radius: 14px;
+            width: 100%;
+            max-width: 780px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 20px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .modal-header h3 { margin: 0; font-size: 18px; }
+
+        #inspectorMap {
+            width: 100%;
+            height: 320px;
+            border-radius: 10px;
+            background: #e5e7eb;
+            margin-bottom: 14px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Leaflet Layout CSS */
         .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer { position: absolute; left: 0; top: 0; }
         .leaflet-container { overflow: hidden; font-family: "Helvetica Neue", Arial, Helvetica, sans-serif; font-size: 12px; background: #ddd; outline: 0; touch-action: none; }
         .leaflet-tile { user-select: none; -webkit-user-drag: none; }
@@ -77,344 +314,993 @@
         .leaflet-control-container { position: relative; z-index: 800; pointer-events: none; }
         .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
         .leaflet-top { top: 10px; } .leaflet-bottom { bottom: 10px; } .leaflet-left { left: 10px; } .leaflet-right { right: 10px; }
-        .leaflet-control { pointer-events: auto; position: relative; z-index: 800; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .leaflet-control { pointer-events: auto; position: relative; z-index: 800; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
         .leaflet-bar a { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; text-decoration: none; color: black; border-bottom: 1px solid #eee; }
         .leaflet-bar a:hover { background-color: #f9fafb; }
-        .leaflet-control-attribution { padding: 4px 8px; background: rgba(255, 255, 255, 0.9); font-size: 11px; box-shadow: none; border-radius: 4px; }
+        .leaflet-control-attribution { padding: 4px 8px; background: rgba(255, 255, 255, 0.9); font-size: 11px; border-radius: 4px; }
         .leaflet-popup { position: absolute; text-align: center; margin-bottom: 20px; }
-        .leaflet-popup-content-wrapper { padding: 4px; text-align: left; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        .leaflet-popup-content-wrapper { padding: 4px; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
         .leaflet-popup-content { margin: 12px 16px; line-height: 1.4; text-align: center; }
         .leaflet-popup-close-button { position: absolute; top: 8px; right: 10px; text-decoration: none; color: #9ca3af; font-size: 18px; font-weight: bold; }
         .leaflet-grab { cursor: grab; } .leaflet-dragging .leaflet-grab { cursor: grabbing; }
+
+        .btn-yes { background: var(--success-color) !important; color: #fff !important; padding: 6px 12px !important; border: none; border-radius: 6px; cursor: pointer; margin-right: 6px; }
+        .btn-no { background: var(--error-color) !important; color: #fff !important; padding: 6px 12px !important; border: none; border-radius: 6px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="sidebar">
-    <div class="sidebar-header">
-        <h2>🚗 Споделени Пътувания</h2>
+<header class="topbar">
+    <div class="brand" onclick="switchPage('home')">🗺️ Споделени Пътувания</div>
+
+    <nav class="nav-tabs">
+        <button class="nav-btn active" id="nav-home" onclick="switchPage('home')">Начало</button>
+        <button class="nav-btn" id="nav-search" onclick="switchPage('search')">Търсене</button>
+        <button class="nav-btn" id="nav-create" onclick="switchPage('create')">Създаване</button>
+        <button class="nav-btn" id="nav-profile" onclick="switchPage('profile')">Профил</button>
+        <button class="nav-btn" id="nav-admin" onclick="switchPage('admin')" style="display:none;">Админ</button>
+    </nav>
+
+    <div class="topbar-right">
+        <span class="user-pill" id="topbarUserBadge" onclick="switchPage('profile')">Гост (Вход)</span>
+        <button class="btn-add-top" onclick="switchPage('create')">+ Добави пътуване</button>
     </div>
-    
-    <div class="sidebar-content">
-        <div class="card">
-            <h3>Създай пътуване</h3>
-            <p class="hint">Потърси адрес или кликни директно върху картата.</p>
-            
-            <div class="search-container">
-                <input type="text" id="searchInput" placeholder="Търси адрес на картата...">
-                <button onclick="searchAddress()">🔍</button>
+</header>
+
+<div class="workspace">
+
+    <!-- PAGE 1: HOME (MAP) -->
+    <section id="homePage" class="active">
+        <div id="map"></div>
+
+        <div class="map-drawer">
+            <div class="drawer-header">
+                <h3>Активни маршрути</h3>
+                <button class="btn btn-secondary btn-sm" onclick="toggleDrawer()">Свий / Разпъни</button>
             </div>
-
-            <div id="successMsg" class="success-msg">Пътуването е публикувано успешно!</div>
-
-            <div class="form-group">
-                <label>Име на шофьора</label>
-                <input type="text" id="driverName" placeholder="Въведи твоето име">
-                <div class="error-msg" id="err-driverName">Моля, въведи име.</div>
+            <div class="drawer-body" id="homeDrawerBody">
+                <p class="hint">Кликни върху картата за избор на точки или избери пътуване от списъка.</p>
+                <div id="homeRidesList">Зареждане...</div>
             </div>
-
-            <div class="form-group">
-                <label>Точка на качване</label>
-                <input type="text" id="originName" placeholder="Избери от картата..." readonly style="background:#f9fafb; cursor:pointer;" onclick="focusMap()">
-                <div class="error-msg" id="err-originName">Моля, избери начална точка от картата.</div>
-            </div>
-
-            <div class="form-group">
-                <label>Точка на слизане</label>
-                <input type="text" id="destName" placeholder="Избери от картата..." readonly style="background:#f9fafb; cursor:pointer;" onclick="focusMap()">
-                <div class="error-msg" id="err-destName">Моля, избери крайна точка от картата.</div>
-            </div>
-
-            <div class="row">
-                <div class="form-group">
-                    <label>Свободни места</label>
-                    <input type="number" id="seats" value="3" min="1" max="6">
-                </div>
-                <div class="form-group">
-                    <label>Цена на място (лв.)</label>
-                    <input type="number" id="price" placeholder="Напр. 5.00" min="0" step="0.5">
-                    <div class="error-msg" id="err-price">Въведи валидна цена.</div>
-                </div>
-            </div>
-
-            <button class="btn-primary" onclick="createRide()">Публикувай пътуване</button>
         </div>
+    </section>
 
-        <div style="margin-bottom: 10px; font-weight: bold; font-size: 18px; padding-left: 5px;">Налични пътувания</div>
-        <div id="ridesList">Зареждане...</div>
+    <!-- PAGE 2: SEARCH WITHOUT MAP -->
+    <section id="searchPage" class="page-view">
+        <div class="container-narrow">
+            <div class="card">
+                <h3>Търсене на пътуване (без карта)</h3>
+                <p class="hint">Търси по начален град, крайна точка или спирка. Когато харесаш пътуване, натисни <b>„Виж на картата“</b>, за да се отвори попъп картата.</p>
+                <div class="row">
+                    <div class="form-group">
+                        <label>Откъде</label>
+                        <input type="text" id="searchOrigin" placeholder="Напр. София">
+                    </div>
+                    <div class="form-group">
+                        <label>Докъде</label>
+                        <input type="text" id="searchDest" placeholder="Напр. Велико Търново или Варна">
+                    </div>
+                    <div class="form-group" style="max-width: 150px;">
+                        <label>Мин. места</label>
+                        <input type="number" id="searchMinSeats" value="1" min="1" max="8">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="btn btn-primary" onclick="runSearch()">Търси</button>
+                    <button class="btn btn-secondary" onclick="resetSearch()">Изчисти</button>
+                </div>
+            </div>
+            <div id="searchResultsList">Зареждане...</div>
+        </div>
+    </section>
+
+    <!-- PAGE 3: CREATE RIDE PAGE -->
+    <section id="createPage" class="page-view">
+        <div class="container-narrow">
+            <div class="card">
+                <h3>Създаване на споделено пътуване</h3>
+                <p class="hint">Потърси адрес или кликни на картата (страница <b>Начало</b>), за да зададеш начална и крайна точка, и добави междинни спирки по маршрута.</p>
+
+                <div class="row">
+                    <div class="form-group">
+                        <label>Търси адрес на картата</label>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="createSearchInput" placeholder="Напр. София, Велико Търново, Варна...">
+                            <button class="btn btn-secondary" type="button" onclick="searchAddressAndGoMap()">🔍 Карта</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Име на шофьора</label>
+                        <input type="text" id="driverName" placeholder="Въведи име">
+                        <div class="error-msg" id="err-driverName">Моля, въведи име на шофьора.</div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="form-group">
+                        <label>Начална точка</label>
+                        <input type="text" id="originName" placeholder="Избери от картата..." readonly style="background:#f9fafb;">
+                        <div class="error-msg" id="err-originName">Избери начална точка на картата.</div>
+                    </div>
+                    <div class="form-group">
+                        <label>Крайна точка</label>
+                        <input type="text" id="destName" placeholder="Избери от картата..." readonly style="background:#f9fafb;">
+                        <div class="error-msg" id="err-destName">Избери крайна точка на картата.</div>
+                    </div>
+                </div>
+
+                <div class="segment-box">
+                    <label style="margin-bottom:6px;">Междинни спирки (по избор)</label>
+                    <div class="row">
+                        <input type="text" id="stopNameInput" placeholder="Име на спирка (напр. Велико Търново)">
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="addStopFromLastPin()">+ Добави последния потвърден пин като спирка</button>
+                    </div>
+                    <div id="stopsPreview" class="hint" style="margin-top:8px; margin-bottom:0;">Няма добавени спирки.</div>
+                </div>
+
+                <div class="row" style="margin-top:12px;">
+                    <div class="form-group">
+                        <label>Свободни места</label>
+                        <input type="number" id="seats" value="3" min="1" max="8">
+                    </div>
+                    <div class="form-group">
+                        <label>Цена за целия маршрут / място (лв.)</label>
+                        <input type="number" id="price" placeholder="Напр. 25.00" min="0" step="0.5">
+                        <div class="error-msg" id="err-price">Въведи валидна цена.</div>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+                    <button class="btn btn-secondary" type="button" onclick="switchPage('home')">Избери точки на картата</button>
+                    <button class="btn btn-primary" type="button" onclick="createRide()">Публикувай пътуване</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 4: PROFILE PAGE -->
+    <section id="profilePage" class="page-view">
+        <div class="container-narrow">
+            <div id="authSection" class="card">
+                <h3>Вход или регистрация</h3>
+                <p class="hint">Само потребители с профил могат да запазват места в споделени пътувания.</p>
+                <div class="row">
+                    <div class="card" style="margin-bottom:0;">
+                        <h4 style="margin-top:0;">Вход</h4>
+                        <div class="form-group">
+                            <label>Потребителско име</label>
+                            <input type="text" id="loginUsername" placeholder="admin">
+                        </div>
+                        <div class="form-group">
+                            <label>Парола</label>
+                            <input type="password" id="loginPassword" placeholder="Парола">
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-primary" onclick="login()">Вход</button>
+                            <button class="btn btn-secondary btn-sm" onclick="quickAdminLogin()">Бърз Админ вход</button>
+                        </div>
+                        <div class="error-msg" id="err-login"></div>
+                    </div>
+
+                    <div class="card" style="margin-bottom:0;">
+                        <h4 style="margin-top:0;">Регистрация на нов профил</h4>
+                        <div class="form-group">
+                            <label>Потребителско име</label>
+                            <input type="text" id="regUsername" placeholder="petar_k">
+                        </div>
+                        <div class="form-group">
+                            <label>Пълно име</label>
+                            <input type="text" id="regFullName" placeholder="Петър Колев">
+                        </div>
+                        <div class="form-group">
+                            <label>Телефон</label>
+                            <input type="text" id="regPhone" placeholder="+359 88 ...">
+                        </div>
+                        <div class="form-group">
+                            <label>Парола</label>
+                            <input type="password" id="regPassword" placeholder="Парола">
+                        </div>
+                        <button class="btn btn-success" onclick="registerUser()">Създай профил</button>
+                        <div class="error-msg" id="err-reg"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="accountSection" style="display:none;">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <h3 style="margin-bottom:4px;">Моят профил</h3>
+                            <div class="hint" id="profileRoleBadge" style="margin:0;"></div>
+                        </div>
+                        <button class="btn btn-secondary" onclick="logout()">Изход</button>
+                    </div>
+                    <div class="row" style="margin-top:12px;">
+                        <div class="form-group">
+                            <label>Потребителско име</label>
+                            <input type="text" id="profUsername" readonly style="background:#f9fafb;">
+                        </div>
+                        <div class="form-group">
+                            <label>Име</label>
+                            <input type="text" id="profFullName">
+                        </div>
+                        <div class="form-group">
+                            <label>Телефон</label>
+                            <input type="text" id="profPhone">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="saveProfile()">Запази промените</button>
+                </div>
+
+                <div class="card">
+                    <h3>Моите резервации</h3>
+                    <div id="myBookingsList">Нямаш резервации.</div>
+                </div>
+
+                <div class="card">
+                    <h3>Моите пътувания</h3>
+                    <div id="myRidesList">Нямаш публикувани пътувания.</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 5: ADMIN PAGE -->
+    <section id="adminPage" class="page-view">
+        <div class="container-narrow">
+            <div class="card">
+                <h3>Административен панел</h3>
+                <div id="adminRidesList">Зареждане...</div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- POP-UP MAP INSPECTOR & SEGMENT BOOKING -->
+<div class="modal-backdrop" id="rideInspectorModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3 id="inspectorTitle">Маршрут и резервация</h3>
+            <button class="btn btn-secondary btn-sm" onclick="closeInspectorModal()">✕</button>
+        </div>
+        <div id="inspectorMap"></div>
+        <div id="inspectorBody"></div>
     </div>
 </div>
 
-<div id="map"></div>
-
 <script>
+    const STORAGE_TOKEN_KEY = 'rideshare_token';
+    let authToken = localStorage.getItem(STORAGE_TOKEN_KEY) || null;
+    let currentUser = null;
+    let allRidesCache = [];
+
     let pickupCoords = null;
     let dropoffCoords = null;
+    let draftStops = [];
+    let lastConfirmedPin = null;
     let tempMarkers = [];
     let pendingMarker = null;
-    let pendingLocationData = null; 
+    let pendingLocationData = null;
+
     let map = null;
     let routeLayers = null;
+    let inspectorMap = null;
+    let inspectorLayers = null;
 
+    function esc(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function authHeaders() {
+        const h = { 'Content-Type': 'application/json' };
+        if (authToken) h['Authorization'] = `Bearer ${authToken}`;
+        return h;
+    }
+
+    function syncMainMapSize() {
+        if (!map) return;
+        requestAnimationFrame(() => map.invalidateSize());
+        setTimeout(() => { if (map) map.invalidateSize(); }, 120);
+    }
+
+    function switchPage(pageName) {
+        const pages = {
+            home: 'homePage',
+            search: 'searchPage',
+            create: 'createPage',
+            profile: 'profilePage',
+            admin: 'adminPage',
+        };
+        Object.entries(pages).forEach(([key, id]) => {
+            document.getElementById(id).classList.toggle('active', key === pageName);
+            const navBtn = document.getElementById(`nav-${key}`);
+            if (navBtn) navBtn.classList.toggle('active', key === pageName);
+        });
+
+        if (pageName === 'home') {
+            initMainMap();
+            syncMainMapSize();
+        } else if (pageName === 'search') {
+            renderSearchResults(allRidesCache);
+        } else if (pageName === 'create') {
+            if (currentUser && !document.getElementById('driverName').value) {
+                document.getElementById('driverName').value = currentUser.full_name;
+            }
+        } else if (pageName === 'profile') {
+            loadProfile();
+        } else if (pageName === 'admin') {
+            loadAdminRides();
+        }
+    }
+
+    function toggleDrawer() {
+        const body = document.getElementById('homeDrawerBody');
+        body.style.display = body.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // --- AUTH & PROFILE ---
+    async function refreshCurrentUser() {
+        if (!authToken) {
+            currentUser = null;
+            updateTopbarUser();
+            return;
+        }
+        try {
+            const res = await fetch('/api/profile', { headers: authHeaders() });
+            if (!res.ok) {
+                authToken = null;
+                localStorage.removeItem(STORAGE_TOKEN_KEY);
+                currentUser = null;
+                updateTopbarUser();
+                return;
+            }
+            const data = await res.json();
+            currentUser = data.user;
+            updateTopbarUser();
+            renderAccountData(data);
+        } catch (e) { console.error(e); }
+    }
+
+    function updateTopbarUser() {
+        const badge = document.getElementById('topbarUserBadge');
+        const adminNav = document.getElementById('nav-admin');
+        if (currentUser) {
+            badge.textContent = currentUser.role === 'admin'
+                ? `🛡️ ${currentUser.full_name} (Админ)`
+                : `👤 ${currentUser.full_name}`;
+            adminNav.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+        } else {
+            badge.textContent = 'Гост (Вход)';
+            adminNav.style.display = 'none';
+        }
+        renderHomeRides(allRidesCache);
+        if (document.getElementById('searchPage').classList.contains('active')) {
+            renderSearchResults(allRidesCache);
+        }
+    }
+
+    async function login() {
+        const errEl = document.getElementById('err-login');
+        errEl.style.display = 'none';
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: document.getElementById('loginUsername').value.trim(),
+                password: document.getElementById('loginPassword').value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errEl.textContent = data.detail || 'Грешка при вход.';
+            errEl.style.display = 'block';
+            return;
+        }
+        authToken = data.token;
+        localStorage.setItem(STORAGE_TOKEN_KEY, authToken);
+        await refreshCurrentUser();
+        loadProfile();
+    }
+
+    async function quickAdminLogin() {
+        document.getElementById('loginUsername').value = 'admin';
+        document.getElementById('loginPassword').value = 'admin123';
+        await login();
+    }
+
+    async function registerUser() {
+        const errEl = document.getElementById('err-reg');
+        errEl.style.display = 'none';
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: document.getElementById('regUsername').value.trim(),
+                full_name: document.getElementById('regFullName').value.trim(),
+                phone: document.getElementById('regPhone').value.trim(),
+                password: document.getElementById('regPassword').value,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errEl.textContent = data.detail || 'Грешка при регистрация.';
+            errEl.style.display = 'block';
+            return;
+        }
+        authToken = data.token;
+        localStorage.setItem(STORAGE_TOKEN_KEY, authToken);
+        await refreshCurrentUser();
+        loadProfile();
+    }
+
+    function logout() {
+        authToken = null;
+        currentUser = null;
+        localStorage.removeItem(STORAGE_TOKEN_KEY);
+        updateTopbarUser();
+        loadProfile();
+        switchPage('home');
+    }
+
+    async function loadProfile() {
+        if (!authToken) {
+            document.getElementById('authSection').style.display = 'block';
+            document.getElementById('accountSection').style.display = 'none';
+            return;
+        }
+        const res = await fetch('/api/profile', { headers: authHeaders() });
+        if (!res.ok) { logout(); return; }
+        const data = await res.json();
+        currentUser = data.user;
+        updateTopbarUser();
+        document.getElementById('authSection').style.display = 'none';
+        document.getElementById('accountSection').style.display = 'block';
+        renderAccountData(data);
+    }
+
+    function renderAccountData(data) {
+        const u = data.user;
+        document.getElementById('profUsername').value = u.username;
+        document.getElementById('profFullName').value = u.full_name;
+        document.getElementById('profPhone').value = u.phone || '';
+        document.getElementById('profileRoleBadge').textContent =
+            `Роля: ${u.role === 'admin' ? 'Администратор' : 'Потребител'}`;
+
+        const bookingsEl = document.getElementById('myBookingsList');
+        bookingsEl.innerHTML = (!data.bookings || !data.bookings.length)
+            ? '<p class="hint">Все още нямаш направени резервации.</p>'
+            : data.bookings.map(b => `
+                <div class="ride-item">
+                    <div class="ride-route">${esc(b.segment_start_label)} → ${esc(b.segment_end_label)}</div>
+                    <div class="ride-meta">Пълен маршрут: <b>${esc(b.full_route)}</b> · Шофьор: ${esc(b.driver_name)} · Места: <b>${b.seats_booked}</b> · Цена: <b>${Number(b.segment_price).toFixed(2)} лв.</b></div>
+                    <button class="btn btn-danger btn-sm" onclick="cancelBooking(${b.id})">Откажи резервация</button>
+                </div>
+            `).join('');
+
+        const ridesEl = document.getElementById('myRidesList');
+        ridesEl.innerHTML = (!data.rides || !data.rides.length)
+            ? '<p class="hint">Все още нямаш публикувани пътувания.</p>'
+            : data.rides.map(r => `
+                <div class="ride-item">
+                    <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
+                    <div class="ride-meta">Свободни места: ${r.available_seats}/${r.total_seats} · Цена: ${Number(r.price_per_seat).toFixed(2)} лв.</div>
+                    <button class="btn btn-secondary btn-sm" onclick="openRideInspector(${r.id})">Виж на картата</button>
+                </div>
+            `).join('');
+    }
+
+    async function saveProfile() {
+        const res = await fetch('/api/profile', {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify({
+                full_name: document.getElementById('profFullName').value.trim(),
+                phone: document.getElementById('profPhone').value.trim(),
+            }),
+        });
+        if (res.ok) { alert('Профилът е обновен.'); await refreshCurrentUser(); }
+    }
+
+    async function cancelBooking(bookingId) {
+        const res = await fetch(`/api/bookings/${bookingId}`, { method: 'DELETE', headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Неуспешно отказване.'); return; }
+        await fetchRides();
+        if (document.getElementById('profilePage').classList.contains('active')) loadProfile();
+        if (document.getElementById('adminPage').classList.contains('active')) loadAdminRides();
+    }
+
+    // --- ADMIN ---
+    async function loadAdminRides() {
+        const container = document.getElementById('adminRidesList');
+        const res = await fetch('/api/admin/rides', { headers: authHeaders() });
+        if (!res.ok) { container.innerHTML = '<p class="hint">Нямаш администраторски достъп.</p>'; return; }
+        const rides = await res.json();
+        if (!rides.length) { container.innerHTML = '<p class="hint">Няма създадени пътувания.</p>'; return; }
+
+        container.innerHTML = rides.map(r => {
+            const paxHtml = (r.passengers || []).map(p => `
+                <li>${esc(p.name)} (${p.seats} м.) — <i>${esc(p.segment_start_label)} → ${esc(p.segment_end_label)}</i> (${Number(p.segment_price).toFixed(2)} лв.)
+                <button class="btn btn-secondary btn-sm" style="margin-left:6px;" onclick="cancelBooking(${p.id})">Откажи</button></li>
+            `).join('');
+            return `
+                <div class="ride-item">
+                    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <div>
+                            <div class="ride-route">#${r.id} · ${esc(r.origin_name)} → ${esc(r.dest_name)}</div>
+                            <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b> · Места: ${r.available_seats}/${r.total_seats} · Цена: ${Number(r.price_per_seat).toFixed(2)} лв. · Статус: <b>${esc(r.status)}</b></div>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button class="btn btn-secondary btn-sm" onclick="openRideInspector(${r.id})">Карта</button>
+                            <button class="btn btn-secondary btn-sm" onclick="adminSetStatus(${r.id}, '${r.status === 'cancelled' ? 'open' : 'cancelled'}')">${r.status === 'cancelled' ? 'Отвори' : 'Отмени'}</button>
+                            <button class="btn btn-danger btn-sm" onclick="adminDeleteRide(${r.id})">Изтрий</button>
+                        </div>
+                    </div>
+                    ${paxHtml ? `<ul style="margin:8px 0 0 18px; font-size:13px;">${paxHtml}</ul>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function adminSetStatus(rideId, status) {
+        const res = await fetch(`/api/admin/rides/${rideId}/status`, {
+            method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }),
+        });
+        if (res.ok) { await fetchRides(); loadAdminRides(); }
+    }
+
+    async function adminDeleteRide(rideId) {
+        if (!confirm('Сигурен ли си, че искаш да изтриеш това пътуване?')) return;
+        const res = await fetch(`/api/admin/rides/${rideId}`, { method: 'DELETE', headers: authHeaders() });
+        if (res.ok) { await fetchRides(); loadAdminRides(); }
+    }
+
+    // --- MAP & GEOCODING ---
     function createPinIcon(color) {
+        if (typeof L === 'undefined') return null;
         return new L.DivIcon({
-            html: `<div style="width:20px;height:20px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.4);"></div>`,
-            className: '', iconSize: [26, 26], iconAnchor: [13, 13]
+            html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.4);"></div>`,
+            className: '', iconSize: [24, 24], iconAnchor: [12, 12],
         });
     }
 
-    function focusMap() {
-        document.getElementById('searchInput').focus();
+    function addReliableTileLayer(targetMap) {
+        const primaryUrl = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
+        const fallbackUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        let switched = false;
+        const layer = new L.TileLayer(primaryUrl, {
+            subdomains: 'abc',
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        });
+        layer.on('tileerror', () => {
+            if (!switched) {
+                switched = true;
+                layer.setUrl(fallbackUrl);
+            }
+        });
+        layer.addTo(targetMap);
+        return layer;
     }
 
-    function clearErrors() {
-        document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
-        document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
-        document.getElementById('successMsg').style.display = 'none';
+    function createBaseMap(containerId, center = [42.7339, 25.4858], zoom = 7) {
+        if (typeof L === 'undefined') {
+            document.getElementById(containerId).innerHTML = '<p style="padding:16px;color:#b91c1c;"><b>Картата не можа да се зареди</b> (провери /static/leaflet-global.js).</p>';
+            return null;
+        }
+        const m = new L.Map(containerId).setView(center, zoom);
+        addReliableTileLayer(m);
+        return m;
     }
 
-    function showError(inputId, errorId) {
-        if(inputId) document.getElementById(inputId).classList.add('error-input');
-        if(errorId) document.getElementById(errorId).style.display = 'block';
+    function initMainMap() {
+        if (map) return;
+        map = createBaseMap('map', [42.7339, 25.4858], 7);
+        if (!map) return;
+        routeLayers = new L.LayerGroup().addTo(map);
+        map.on('click', e => handleLocationSelection(e.latlng.lat, e.latlng.lng));
+        if (allRidesCache[0]) drawRouteOnLayerGroup(allRidesCache[0], routeLayers, '#2563eb');
+        syncMainMapSize();
     }
 
     async function getAddressFromCoords(lat, lng) {
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`);
             const data = await res.json();
             if (data && data.address) {
                 const a = data.address;
-                const street = a.road || a.pedestrian || a.path || "";
-                const number = a.house_number || "";
-                const neighborhood = a.suburb || a.quarter || "";
-                const city = a.city || a.town || a.village || "";
-                
-                let mainPart = street;
-                if (street && number) mainPart = `${street} ${number}`;
-                else if (!street && neighborhood) mainPart = neighborhood;
-                
-                if (mainPart && city) return `${mainPart}, ${city}`;
-                if (mainPart) return mainPart;
+                const city = a.city || a.town || a.village || a.county || '';
+                const road = a.road || a.pedestrian || '';
+                if (road && city) return `${road}, ${city}`;
                 if (city) return city;
-                return data.display_name.split(",").slice(0, 2).join(",");
+                if (road) return road;
+                if (data.display_name) return data.display_name.split(',').slice(0, 2).join(',');
             }
-            return "Избрана локация";
-        } catch (error) { return "Избрана локация"; }
+            return 'Избрана локация';
+        } catch { return 'Избрана локация'; }
     }
 
-    async function searchAddress() {
-        const query = document.getElementById('searchInput').value;
+    async function searchAddressOnMap(query) {
         if (!query) return;
-        
+        initMainMap();
+        if (!map) return;
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=bg&limit=1`);
         const data = await res.json();
-        
         if (data && data.length > 0) {
             const lat = parseFloat(data[0].lat);
             const lng = parseFloat(data[0].lon);
-            const shortAddress = data[0].display_name.split(",").slice(0, 2).join(",");
-            
-            map.flyTo([lat, lng], 17);
+            const shortAddress = data[0].display_name.split(',').slice(0, 2).join(',');
+            map.flyTo([lat, lng], 12);
             handleLocationSelection(lat, lng, shortAddress);
         } else {
-            alert("Адресът не е намерен.");
+            alert('Адресът не е намерен.');
         }
     }
 
-    function handleLocationSelection(lat, lng, fetchedAddress = null) {
-        if (pendingMarker) map.removeLayer(pendingMarker);
-        
-        pendingMarker = new L.Marker([lat, lng], { icon: createPinIcon('#eab308') }).addTo(map);
-        
-        const processAddress = async () => {
-            let address = fetchedAddress;
-            if (!address) {
-                pendingMarker.bindPopup("Зареждане...").openPopup();
-                address = await getAddressFromCoords(lat, lng);
-            }
-            pendingLocationData = { lat, lng, address };
-            const popupContent = `
-                <div style="font-size:14px; margin-bottom:8px;"><b>${address}</b></div>
-                <div style="margin-bottom:10px; color:#555;">Потвърждаваш ли локацията?</div>
-                <button class="btn-yes" onclick="window.confirmLocation()">Да</button>
-                <button class="btn-no" onclick="window.cancelLocation()">Не</button>
-            `;
-            pendingMarker.bindPopup(popupContent).openPopup();
-        };
-        processAddress();
+    async function searchAddressAndGoMap() {
+        const q = document.getElementById('createSearchInput').value.trim();
+        if (!q) return;
+        switchPage('home');
+        await searchAddressOnMap(q);
     }
 
-    window.confirmLocation = function() {
-        if (!pendingLocationData) return;
+    function handleLocationSelection(lat, lng, fetchedAddress = null) {
+        if (!map || typeof L === 'undefined') return;
+        if (pendingMarker) map.removeLayer(pendingMarker);
+        pendingMarker = new L.Marker([lat, lng], { icon: createPinIcon('#eab308') }).addTo(map);
+
+        (async () => {
+            const address = fetchedAddress || await getAddressFromCoords(lat, lng);
+            pendingLocationData = { lat, lng, address };
+            pendingMarker.bindPopup(`
+                <div style="font-size:13px; margin-bottom:6px;"><b>${esc(address)}</b></div>
+                <div style="margin-bottom:8px; color:#555;">Потвърждаваш ли точката?</div>
+                <button class="btn-yes" onclick="window.confirmLocation()">Да</button>
+                <button class="btn-no" onclick="window.cancelLocation()">Не</button>
+            `).openPopup();
+        })();
+    }
+
+    window.confirmLocation = function () {
+        if (!pendingLocationData || !map) return;
         const { lat, lng, address } = pendingLocationData;
         map.closePopup();
-        if (pendingMarker) map.removeLayer(pendingMarker);
-        pendingMarker = null;
-
-        clearErrors(); // Clear validation errors if user fixes the map issue
+        if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+        lastConfirmedPin = { lat, lng, address };
 
         if (!pickupCoords || (pickupCoords && dropoffCoords)) {
             tempMarkers.forEach(m => map.removeLayer(m));
             tempMarkers = [];
-            pickupCoords = { lat, lng };
+            draftStops = [];
+            renderStopsPreview();
+            pickupCoords = { lat, lng, name: address };
             dropoffCoords = null;
-            
-            const marker = new L.Marker([lat, lng], { icon: createPinIcon('#10b981') }).addTo(map)
-                .bindPopup(`🟢 Качване:<br><b>${address}</b>`).openPopup();
-            tempMarkers.push(marker);
-            
+            tempMarkers.push(new L.Marker([lat, lng], { icon: createPinIcon('#10b981') }).addTo(map).bindPopup(`🟢 Начало: <b>${esc(address)}</b>`).openPopup());
             document.getElementById('originName').value = address;
+            document.getElementById('destName').value = '';
         } else {
-            dropoffCoords = { lat, lng };
-            
-            const marker = new L.Marker([lat, lng], { icon: createPinIcon('#ef4444') }).addTo(map)
-                .bindPopup(`🔴 Слизане:<br><b>${address}</b>`).openPopup();
-            tempMarkers.push(marker);
-            
+            dropoffCoords = { lat, lng, name: address };
+            tempMarkers.push(new L.Marker([lat, lng], { icon: createPinIcon('#ef4444') }).addTo(map).bindPopup(`🔴 Край: <b>${esc(address)}</b>`).openPopup());
             document.getElementById('destName').value = address;
+            switchPage('create');
         }
-        document.getElementById('searchInput').value = ''; 
     };
 
-    window.cancelLocation = function() {
-        if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
+    window.cancelLocation = function () {
+        if (pendingMarker && map) { map.removeLayer(pendingMarker); pendingMarker = null; }
         pendingLocationData = null;
     };
 
-    if (typeof L === 'undefined') {
-        document.getElementById('map').innerHTML = '<p style="padding:20px; color:red;"><b>Грешка:</b> Leaflet не е зареден.</p>';
-    } else {
-        map = new L.Map('map').setView([43.2141, 27.9147], 14);
-        new L.TileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-        routeLayers = new L.LayerGroup().addTo(map);
-        map.on('click', function (e) { handleLocationSelection(e.latlng.lat, e.latlng.lng); });
+    function addStopFromLastPin() {
+        const customName = document.getElementById('stopNameInput').value.trim();
+        const pin = lastConfirmedPin || dropoffCoords || pickupCoords;
+        if (!pin) { alert('Първо потвърди точка на картата.'); return; }
+        draftStops.push({ name: customName || pin.address || pin.name || 'Спирка', lat: pin.lat, lng: pin.lng });
+        document.getElementById('stopNameInput').value = '';
+        renderStopsPreview();
     }
 
+    function renderStopsPreview() {
+        const el = document.getElementById('stopsPreview');
+        el.innerHTML = draftStops.length
+            ? draftStops.map((s, idx) => `<span class="badge badge-warn">${idx + 1}. ${esc(s.name)} <a href="#" onclick="removeDraftStop(${idx});return false;" style="margin-left:6px;color:inherit;text-decoration:none;">✕</a></span>`).join('')
+            : 'Няма добавени спирки.';
+    }
+
+    function removeDraftStop(idx) { draftStops.splice(idx, 1); renderStopsPreview(); }
+
+    async function drawRouteOnLayerGroup(ride, layerGroup, color = '#2563eb') {
+        if (typeof L === 'undefined' || !layerGroup) return;
+        layerGroup.clearLayers();
+        const waypoints = [
+            [ride.origin_lng, ride.origin_lat],
+            ...(ride.stops || []).map(s => [s.lng, s.lat]),
+            [ride.dest_lng, ride.dest_lat],
+        ];
+        const coordsParam = waypoints.map(p => `${p[0]},${p[1]}`).join(';');
+        try {
+            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsParam}?overview=full&geometries=geojson`);
+            const data = await res.json();
+            if (data.routes && data.routes.length > 0) {
+                const latLngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                const poly = new L.Polyline(latLngs, { color, weight: 5, opacity: 0.85 }).addTo(layerGroup);
+                poly.on('click', () => openRideInspector(ride.id));
+            } else { throw new Error('No OSRM route'); }
+        } catch {
+            new L.Polyline(waypoints.map(p => [p[1], p[0]]), { color, weight: 4, dashArray: '6,8' }).addTo(layerGroup);
+        }
+
+        new L.Marker([ride.origin_lat, ride.origin_lng], { icon: createPinIcon('#10b981') }).addTo(layerGroup).bindPopup(`Начало: <b>${esc(ride.origin_name)}</b>`);
+        (ride.stops || []).forEach(st => {
+            new L.Marker([st.lat, st.lng], { icon: createPinIcon('#f59e0b') }).addTo(layerGroup).bindPopup(`Спирка: <b>${esc(st.name)}</b>`);
+        });
+        new L.Marker([ride.dest_lat, ride.dest_lng], { icon: createPinIcon('#ef4444') }).addTo(layerGroup).bindPopup(`Край: <b>${esc(ride.dest_name)}</b>`);
+    }
+
+    // --- RIDES & SEARCH ---
     async function fetchRides() {
         const res = await fetch('/api/rides');
         const rides = await res.json();
-        const container = document.getElementById('ridesList');
-        container.innerHTML = '';
+        allRidesCache = rides;
+        renderHomeRides(rides);
+        if (document.getElementById('searchPage').classList.contains('active')) renderSearchResults(rides);
+    }
+
+    function renderHomeRides(rides) {
+        const listEl = document.getElementById('homeRidesList');
+        if (!listEl) return;
         if (routeLayers) routeLayers.clearLayers();
-
-        if (rides.length === 0) {
-            container.innerHTML = '<p class="hint">Все още няма публикувани пътувания.</p>';
+        if (!rides || !rides.length) {
+            listEl.innerHTML = '<p class="hint">Няма активни пътувания. Отвори страница <b>Създаване</b>.</p>';
             return;
         }
-
-        for (const ride of rides) {
-            if (routeLayers) {
-                const routeColor = ride.available_seats > 0 ? '#3b82f6' : '#9ca3af';
-                try {
-                    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${ride.origin_lng},${ride.origin_lat};${ride.dest_lng},${ride.dest_lat}?overview=full&geometries=geojson`;
-                    const routeRes = await fetch(osrmUrl);
-                    const routeData = await routeRes.json();
-                    if (routeData.routes && routeData.routes.length > 0) {
-                        const coords = routeData.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                        new L.Polyline(coords, { color: routeColor, weight: 5, opacity: 0.8 }).addTo(routeLayers);
-                    } else throw new Error("No route");
-                } catch (err) {
-                    new L.Polyline([ [ride.origin_lat, ride.origin_lng], [ride.dest_lat, ride.dest_lng] ], { color: routeColor, weight: 4, dashArray: '5, 10' }).addTo(routeLayers);
-                }
-            }
-
-            const passengerNames = ride.passengers.map(p => `${p.name} (${p.seats})`).join(', ') || 'Няма';
-
-            const card = document.createElement('div');
-            card.className = 'card ride-card';
-            card.innerHTML = `
-                <div class="ride-header">📍 ${ride.origin_name} <br>🏁 ${ride.dest_name}</div>
-                <div style="margin-bottom: 10px;">
-                    <span class="badge badge-price">💵 ${parseFloat(ride.price_per_seat).toFixed(2)} лв. / място</span>
-                    <span class="badge badge-seats">💺 ${ride.available_seats} свободни</span>
-                </div>
-                <div class="ride-details">
-                    👤 <b>Шофьор:</b> ${ride.driver_name}<br>
-                    👥 <b>Пътници:</b> ${passengerNames}
-                </div>
-                ${ride.available_seats > 0 ? `
-                    <div style="margin-top: 15px;">
-                        <input type="text" id="rider_${ride.id}" placeholder="Твоето име за резервация">
-                        <div class="error-msg" id="err-rider_${ride.id}">Въведи име за резервация.</div>
-                        <button class="btn-primary" onclick="bookRide(${ride.id})">Резервирай 1 място</button>
+        listEl.innerHTML = rides.map(r => {
+            const stopsText = (r.stops && r.stops.length) ? ` · Спирки: ${r.stops.map(s => esc(s.name)).join(', ')}` : '';
+            return `
+                <div class="ride-item">
+                    <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
+                    <div>
+                        <span class="badge badge-price">${Number(r.price_per_seat).toFixed(2)} лв.</span>
+                        <span class="badge badge-seats">${r.available_seats} свободни</span>
                     </div>
-                ` : `<button disabled>Няма свободни места</button>`}
+                    <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b>${stopsText}</div>
+                    <button class="btn btn-primary btn-sm" onclick="openRideInspector(${r.id})">Карта и резервация</button>
+                </div>
             `;
-            container.appendChild(card);
-        }
+        }).join('');
+        if (routeLayers && rides[0]) drawRouteOnLayerGroup(rides[0], routeLayers, '#2563eb');
     }
 
-    async function createRide() {
-        clearErrors();
-        let isValid = true;
-
-        const driver_name = document.getElementById('driverName').value.trim();
-        const available_seats = parseInt(document.getElementById('seats').value);
-        const priceText = document.getElementById('price').value;
-        const price_per_seat = parseFloat(priceText);
-
-        if (!driver_name) { showError('driverName', 'err-driverName'); isValid = false; }
-        if (!pickupCoords) { showError('originName', 'err-originName'); isValid = false; }
-        if (!dropoffCoords) { showError('destName', 'err-destName'); isValid = false; }
-        if (isNaN(price_per_seat) || price_per_seat < 0 || priceText === "") { showError('price', 'err-price'); isValid = false; }
-
-        if (!isValid) return;
-
-        await fetch('/api/rides', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                driver_name, 
-                origin_name: document.getElementById('originName').value, 
-                dest_name: document.getElementById('destName').value,
-                origin_lat: pickupCoords.lat, origin_lng: pickupCoords.lng,
-                dest_lat: dropoffCoords.lat, dest_lng: dropoffCoords.lng,
-                available_seats, price_per_seat
-            })
-        });
-
-        if (map) tempMarkers.forEach(m => map.removeLayer(m));
-        tempMarkers = []; pickupCoords = null; dropoffCoords = null;
-        
-        document.getElementById('originName').value = '';
-        document.getElementById('destName').value = '';
-        document.getElementById('price').value = '';
-        document.getElementById('successMsg').style.display = 'block';
-        
-        setTimeout(() => { document.getElementById('successMsg').style.display = 'none'; }, 4000);
+    async function runSearch() {
+        const origin = document.getElementById('searchOrigin').value.trim();
+        const destination = document.getElementById('searchDest').value.trim();
+        const minSeats = parseInt(document.getElementById('searchMinSeats').value, 10) || 1;
+        const params = new URLSearchParams();
+        if (origin) params.set('origin', origin);
+        if (destination) params.set('destination', destination);
+        if (minSeats > 1) params.set('min_seats', String(minSeats));
+        const res = await fetch(`/api/rides?${params.toString()}`);
+        renderSearchResults(await res.json());
     }
 
-    async function bookRide(rideId) {
-        clearErrors();
-        const riderInput = document.getElementById(`rider_${rideId}`);
-        const rider_name = riderInput.value.trim();
-        
-        if (!rider_name) {
-            showError(`rider_${rideId}`, `err-rider_${rideId}`);
+    function resetSearch() {
+        document.getElementById('searchOrigin').value = '';
+        document.getElementById('searchDest').value = '';
+        document.getElementById('searchMinSeats').value = '1';
+        renderSearchResults(allRidesCache);
+    }
+
+    function renderSearchResults(rides) {
+        const container = document.getElementById('searchResultsList');
+        if (!rides || !rides.length) {
+            container.innerHTML = '<div class="card"><p class="hint">Няма намерени пътувания.</p></div>';
             return;
         }
+        container.innerHTML = rides.map(r => {
+            const stopsBadge = (r.stops && r.stops.length)
+                ? `<div class="ride-meta">Междинни точки: <b>${r.stops.map(s => esc(s.name)).join(' → ')}</b></div>`
+                : '';
+            return `
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <div>
+                            <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
+                            <div>
+                                <span class="badge badge-price">от ${Number(r.price_per_seat).toFixed(2)} лв.</span>
+                                <span class="badge badge-seats">${r.available_seats} свободни места</span>
+                            </div>
+                            ${stopsBadge}
+                            <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b></div>
+                        </div>
+                        <button class="btn btn-primary" onclick="openRideInspector(${r.id})">🗺️ Виж на картата</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // --- POPUP MAP INSPECTOR & BOOKING (REQUIRES PROFILE) ---
+    async function openRideInspector(rideId) {
+        const ride = allRidesCache.find(r => r.id === rideId);
+        if (!ride) return;
+        document.getElementById('inspectorTitle').textContent = `${ride.origin_name} → ${ride.dest_name}`;
+        document.getElementById('rideInspectorModal').classList.add('open');
+
+        if (inspectorMap) { inspectorMap.remove(); inspectorMap = null; inspectorLayers = null; }
+
+        setTimeout(async () => {
+            inspectorMap = createBaseMap('inspectorMap', [ride.origin_lat, ride.origin_lng], 7);
+            if (inspectorMap && typeof L !== 'undefined') {
+                inspectorLayers = new L.LayerGroup().addTo(inspectorMap);
+                inspectorMap.invalidateSize();
+                inspectorMap.fitBounds([[ride.origin_lat, ride.origin_lng], [ride.dest_lat, ride.dest_lng]], { padding: [30, 30] });
+                await drawRouteOnLayerGroup(ride, inspectorLayers, '#2563eb');
+            }
+        }, 80);
+
+        const points = [
+            { label: ride.origin_name, ratio: 0.0 },
+            ...(ride.stops || []).map(s => ({ label: s.name, ratio: Number(s.ratio ?? 0.5) })),
+            { label: ride.dest_name, ratio: 1.0 },
+        ];
+        const pointOptions = points.map((p, idx) =>
+            `<option value="${idx}" data-ratio="${p.ratio}" data-label="${esc(p.label)}">${esc(p.label)} (${Math.round(p.ratio * 100)}%)</option>`
+        ).join('');
+        const paxList = (ride.passengers || []).map(p =>
+            `<li>${esc(p.name)} (${p.seats} м.) — <b>${esc(p.segment_start_label)} → ${esc(p.segment_end_label)}</b></li>`
+        ).join('');
+
+        const bookingFormHtml = currentUser ? `
+            <div class="segment-box">
+                <div style="font-weight:700; font-size:14px; margin-bottom:8px;">Запази места (резервирано за профил: <b>${esc(currentUser.full_name)}</b>)</div>
+                <div class="row">
+                    <div class="form-group"><label>Качване от</label><select id="segStartSelect" onchange="updateSegmentPricePreview(${ride.id})">${pointOptions}</select></div>
+                    <div class="form-group"><label>Слизане до</label><select id="segEndSelect" onchange="updateSegmentPricePreview(${ride.id})">${pointOptions}</select></div>
+                </div>
+                <div class="row">
+                    <div class="form-group"><label>Брой места</label><input type="number" id="segSeats" value="1" min="1" max="${Math.max(1, ride.available_seats)}" onchange="updateSegmentPricePreview(${ride.id})"></div>
+                </div>
+                <div id="segPricePreview" style="font-weight:700; color:var(--primary); margin-bottom:10px;"></div>
+                <button class="btn btn-primary" onclick="submitSegmentBooking(${ride.id})">Запази места</button>
+            </div>
+        ` : `
+            <div class="auth-notice">
+                <b>Само потребители с профил могат да запазват места.</b>
+                <div style="margin-top:8px;">
+                    <button class="btn btn-primary btn-sm" onclick="closeInspectorModal(); switchPage('profile');">Към вход / регистрация</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('inspectorBody').innerHTML = `
+            <div style="margin-bottom:10px;">
+                <span class="badge badge-price">Базова цена: ${Number(ride.price_per_seat).toFixed(2)} лв.</span>
+                <span class="badge badge-seats">Свободни: ${ride.available_seats}/${ride.total_seats}</span>
+                <span style="font-size:13px; color:var(--text-muted);">Шофьор: <b>${esc(ride.driver_name)}</b></span>
+            </div>
+            ${paxList ? `<div class="ride-meta"><b>Резервации:</b><ul style="margin:4px 0 8px 18px;">${paxList}</ul></div>` : ''}
+            ${bookingFormHtml}
+        `;
+
+        if (currentUser) {
+            const endSel = document.getElementById('segEndSelect');
+            if (endSel && endSel.options.length > 1) endSel.selectedIndex = endSel.options.length - 1;
+            updateSegmentPricePreview(ride.id);
+        }
+    }
+
+    function updateSegmentPricePreview(rideId) {
+        const ride = allRidesCache.find(r => r.id === rideId);
+        if (!ride) return;
+        const startOpt = document.getElementById('segStartSelect')?.selectedOptions?.[0];
+        const endOpt = document.getElementById('segEndSelect')?.selectedOptions?.[0];
+        const seats = Math.max(1, parseInt(document.getElementById('segSeats')?.value || '1', 10));
+        const previewEl = document.getElementById('segPricePreview');
+        if (!startOpt || !endOpt || !previewEl) return;
+
+        const sRatio = parseFloat(startOpt.dataset.ratio || '0');
+        const eRatio = parseFloat(endOpt.dataset.ratio || '1');
+        if (eRatio <= sRatio + 1e-4) { previewEl.textContent = '⚠️ Крайната точка трябва да е след началната.'; return; }
+        const span = eRatio - sRatio;
+        const factor = span >= 0.97 ? 1.0 : Math.max(0.15, Number(span.toFixed(2)));
+        previewEl.textContent = `Участък: ${startOpt.dataset.label} → ${endOpt.dataset.label} · Цена: ${(ride.price_per_seat * factor * seats).toFixed(2)} лв.`;
+    }
+
+    async function submitSegmentBooking(rideId) {
+        if (!currentUser) {
+            alert('Трябва да си влязъл в профил, за да запазиш място.');
+            return;
+        }
+        const startOpt = document.getElementById('segStartSelect').selectedOptions[0];
+        const endOpt = document.getElementById('segEndSelect').selectedOptions[0];
+        const seatsBooked = parseInt(document.getElementById('segSeats').value || '1', 10);
 
         const res = await fetch(`/api/rides/${rideId}/book`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rider_name, seats_booked: 1 })
+            headers: authHeaders(),
+            body: JSON.stringify({
+                seats_booked: seatsBooked,
+                segment_start_label: startOpt.dataset.label,
+                segment_end_label: endOpt.dataset.label,
+                segment_start_ratio: parseFloat(startOpt.dataset.ratio),
+                segment_end_ratio: parseFloat(endOpt.dataset.ratio),
+            }),
         });
-
-        if (!res.ok) {
-            const err = await res.json();
-            alert(err.detail); // Пазим alert тук само за системни грешки от сървъра (напр. ако местата са се изчерпали докато цъкаш)
-        }
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Грешка при резервация.'); return; }
+        alert(data.message || 'Резервацията е успешна!');
+        closeInspectorModal();
+        await fetchRides();
+        refreshCurrentUser();
     }
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.event === 'rides_updated') fetchRides();
-    };
+    function closeInspectorModal() {
+        document.getElementById('rideInspectorModal').classList.remove('open');
+        if (inspectorMap) { inspectorMap.remove(); inspectorMap = null; inspectorLayers = null; }
+    }
+
+    async function createRide() {
+        document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
+        document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
+
+        const driverName = document.getElementById('driverName').value.trim();
+        const originName = document.getElementById('originName').value.trim();
+        const destName = document.getElementById('destName').value.trim();
+        const availableSeats = parseInt(document.getElementById('seats').value, 10);
+        const priceText = document.getElementById('price').value;
+        const pricePerSeat = parseFloat(priceText);
+
+        let valid = true;
+        if (!driverName) { document.getElementById('driverName').classList.add('error-input'); document.getElementById('err-driverName').style.display = 'block'; valid = false; }
+        if (!pickupCoords) { document.getElementById('originName').classList.add('error-input'); document.getElementById('err-originName').style.display = 'block'; valid = false; }
+        if (!dropoffCoords) { document.getElementById('destName').classList.add('error-input'); document.getElementById('err-destName').style.display = 'block'; valid = false; }
+        if (isNaN(pricePerSeat) || pricePerSeat < 0 || priceText === '') { document.getElementById('price').classList.add('error-input'); document.getElementById('err-price').style.display = 'block'; valid = false; }
+        if (!valid) return;
+
+        const res = await fetch('/api/rides', {
+            method: 'POST', headers: authHeaders(),
+            body: JSON.stringify({
+                driver_name: driverName, origin_name: originName, dest_name: destName,
+                origin_lat: pickupCoords.lat, origin_lng: pickupCoords.lng,
+                dest_lat: dropoffCoords.lat, dest_lng: dropoffCoords.lng,
+                stops: draftStops, available_seats: availableSeats, price_per_seat: pricePerSeat,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Грешка при публикуване.'); return; }
+
+        if (map) tempMarkers.forEach(m => map.removeLayer(m));
+        tempMarkers = []; pickupCoords = null; dropoffCoords = null; draftStops = []; lastConfirmedPin = null;
+        renderStopsPreview();
+        document.getElementById('originName').value = ''; document.getElementById('destName').value = ''; document.getElementById('price').value = '';
+        await fetchRides();
+        if (authToken) refreshCurrentUser();
+        switchPage('home');
+    }
+
+    let wsInstance = null;
+    function connectWs() {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsInstance = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+        wsInstance.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.event === 'rides_updated') {
+                    fetchRides();
+                    if (document.getElementById('adminPage').classList.contains('active')) loadAdminRides();
+                    if (document.getElementById('profilePage').classList.contains('active')) loadProfile();
+                }
+            } catch {}
+        };
+        wsInstance.onclose = () => setTimeout(connectWs, 3000);
+    }
+
+    initMainMap();
+    refreshCurrentUser();
     fetchRides();
+    connectWs();
 </script>
 </body>
 </html>
