@@ -3,6 +3,7 @@ import hmac
 import json
 import os
 import secrets
+from datetime import date, timedelta
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import Column, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy import Column, Float, ForeignKey, Integer, String, create_engine, text
 from sqlalchemy.orm import Session, declarative_base, relationship, sessionmaker
 
 # --- DATABASE SETUP ---
@@ -46,6 +47,8 @@ class User(Base):
     username = Column(String, unique=True, nullable=False, index=True)
     full_name = Column(String, nullable=False)
     phone = Column(String, default="")
+    car = Column(String, default="")
+    bio = Column(String, default="")
     password_hash = Column(String, nullable=False)
     role = Column(String, default="user")  # "user" | "admin"
     token = Column(String, unique=True, index=True, nullable=True)
@@ -63,6 +66,12 @@ class Ride(Base):
     dest_lat = Column(Float, nullable=False)
     dest_lng = Column(Float, nullable=False)
     stops_json = Column(String, default="[]")
+    ride_date = Column(String, default="")
+    ride_time = Column(String, default="09:00")
+    car_model = Column(String, default="")
+    pickup_point = Column(String, default="")
+    amenities_json = Column(String, default='["ac","nosmoke","instant"]')
+    notes = Column(String, default="")
     total_seats = Column(Integer, nullable=False)
     available_seats = Column(Integer, nullable=False)
     price_per_seat = Column(Float, nullable=False)
@@ -90,7 +99,36 @@ class Booking(Base):
 Base.metadata.create_all(bind=engine)
 
 
-def seed_default_users():
+def ensure_schema_columns() -> None:
+    """Safely adds new Vozia columns if an older rideshare.db already exists."""
+    user_cols = {
+        "car": "TEXT DEFAULT ''",
+        "bio": "TEXT DEFAULT ''",
+    }
+    ride_cols = {
+        "ride_date": "TEXT DEFAULT ''",
+        "ride_time": "TEXT DEFAULT '09:00'",
+        "car_model": "TEXT DEFAULT ''",
+        "pickup_point": "TEXT DEFAULT ''",
+        "amenities_json": "TEXT DEFAULT '[\"ac\",\"nosmoke\",\"instant\"]'",
+        "notes": "TEXT DEFAULT ''",
+    }
+    with engine.begin() as conn:
+        existing_users = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+        for col, ddl in user_cols.items():
+            if col not in existing_users:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col} {ddl}"))
+
+        existing_rides = {row[1] for row in conn.execute(text("PRAGMA table_info(rides)"))}
+        for col, ddl in ride_cols.items():
+            if col not in existing_rides:
+                conn.execute(text(f"ALTER TABLE rides ADD COLUMN {col} {ddl}"))
+
+
+ensure_schema_columns()
+
+
+def seed_initial_data() -> None:
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.username == "admin").first()
@@ -99,17 +137,158 @@ def seed_default_users():
                 username="admin",
                 full_name="Администратор",
                 phone="+359 88 000 0000",
+                car="Volkswagen Passat B8, сив",
+                bio="Системен администратор на Vozia.",
                 password_hash=hash_password("admin123"),
                 role="admin",
                 token=secrets.token_hex(24),
             )
             db.add(admin)
+
+        demo = db.query(User).filter(User.username == "demo").first()
+        if not demo:
+            demo = User(
+                username="demo",
+                full_name="Александър Иванов",
+                phone="+359 88 554 321",
+                car="Skoda Octavia 2022, графит",
+                bio="Пътувам често между Варна и София. Точен и коректен.",
+                password_hash=hash_password("demo123"),
+                role="user",
+                token=secrets.token_hex(24),
+            )
+            db.add(demo)
+
+        db.commit()
+
+        if db.query(Ride).count() == 0:
+            today = date.today().isoformat()
+            tomorrow = (date.today() + timedelta(days=1)).isoformat()
+            day_after = (date.today() + timedelta(days=2)).isoformat()
+
+            initial_rides = [
+                Ride(
+                    driver_name="Георги Петров",
+                    owner_user_id=admin.id,
+                    origin_name="София",
+                    dest_name="Варна",
+                    origin_lat=42.6977,
+                    origin_lng=23.3219,
+                    dest_lat=43.2141,
+                    dest_lng=27.9147,
+                    stops_json=json.dumps(
+                        [{"name": "Велико Търново", "lat": 43.0757, "lng": 25.6172, "ratio": 0.52}],
+                        ensure_ascii=False,
+                    ),
+                    ride_date=today,
+                    ride_time="14:30",
+                    car_model="Volkswagen Passat B8, сив",
+                    pickup_point="Бензиностанция OMV, бул. Ботевградско шосе",
+                    amenities_json=json.dumps(["ac", "nosmoke", "luggage", "instant"]),
+                    notes="Пътуваме по магистрала Хемус с кратка почивка във Велико Търново.",
+                    total_seats=3,
+                    available_seats=3,
+                    price_per_seat=22.0,
+                    status="open",
+                ),
+                Ride(
+                    driver_name="Елена Стоянова",
+                    owner_user_id=None,
+                    origin_name="София",
+                    dest_name="Пловдив",
+                    origin_lat=42.6977,
+                    origin_lng=23.3219,
+                    dest_lat=42.1354,
+                    dest_lng=24.7453,
+                    stops_json="[]",
+                    ride_date=today,
+                    ride_time="17:00",
+                    car_model="Toyota Corolla Hybrid, бяла",
+                    pickup_point="Метростанция Цариградско шосе",
+                    amenities_json=json.dumps(["ac", "nosmoke", "instant"]),
+                    notes="Спокойно каране, пристигаме при Панаира в Пловдив.",
+                    total_seats=3,
+                    available_seats=3,
+                    price_per_seat=9.0,
+                    status="open",
+                ),
+                Ride(
+                    driver_name="Димитър Колев",
+                    owner_user_id=None,
+                    origin_name="София",
+                    dest_name="Бургас",
+                    origin_lat=42.6977,
+                    origin_lng=23.3219,
+                    dest_lat=42.5048,
+                    dest_lng=27.4626,
+                    stops_json=json.dumps(
+                        [{"name": "Стара Загора", "lat": 42.4258, "lng": 25.6250, "ratio": 0.6}],
+                        ensure_ascii=False,
+                    ),
+                    ride_date=tomorrow,
+                    ride_time="08:00",
+                    car_model="BMW 320d Touring, тъмносин",
+                    pickup_point="The Mall, Цариградско шосе",
+                    amenities_json=json.dumps(["ac", "nosmoke", "luggage", "instant"]),
+                    notes="Директно по АМ Тракия. Има място за големи куфари.",
+                    total_seats=4,
+                    available_seats=4,
+                    price_per_seat=19.0,
+                    status="open",
+                ),
+                Ride(
+                    driver_name="Виктория Маринова",
+                    owner_user_id=None,
+                    origin_name="Варна",
+                    dest_name="София",
+                    origin_lat=43.2141,
+                    origin_lng=27.9147,
+                    dest_lat=42.6977,
+                    dest_lng=23.3219,
+                    stops_json=json.dumps(
+                        [{"name": "Шумен", "lat": 43.2712, "lng": 26.9229, "ratio": 0.22}],
+                        ensure_ascii=False,
+                    ),
+                    ride_date=tomorrow,
+                    ride_time="09:30",
+                    car_model="Audi A4 Avant, черен",
+                    pickup_point="Grand Mall Варна (главен вход)",
+                    amenities_json=json.dumps(["ac", "nosmoke", "luggage", "pets"]),
+                    notes="Може и с малък домашен любимец в транспортна чанта.",
+                    total_seats=3,
+                    available_seats=3,
+                    price_per_seat=21.0,
+                    status="open",
+                ),
+                Ride(
+                    driver_name="Петя Тодорова",
+                    owner_user_id=None,
+                    origin_name="Пловдив",
+                    dest_name="Бургас",
+                    origin_lat=42.1354,
+                    origin_lng=24.7453,
+                    dest_lat=42.5048,
+                    dest_lng=27.4626,
+                    stops_json="[]",
+                    ride_date=day_after,
+                    ride_time="10:00",
+                    car_model="Mazda CX-5, червен",
+                    pickup_point="Централна гара Пловдив",
+                    amenities_json=json.dumps(["ac", "nosmoke", "luggage", "instant"]),
+                    notes="Комфортен SUV, тръгваме точно в 10:00.",
+                    total_seats=3,
+                    available_seats=3,
+                    price_per_seat=14.0,
+                    status="open",
+                ),
+            ]
+            db.add_all(initial_rides)
             db.commit()
     finally:
         db.close()
 
 
-seed_default_users()
+seed_initial_data()
 
 
 # --- SEGMENT & AVAILABILITY HELPERS ---
@@ -135,14 +314,14 @@ def recompute_ride_availability(ride: Ride) -> None:
     ride.status = "full" if ride.available_seats == 0 else "open"
 
 
-def parse_stops(ride: Ride) -> list:
+def parse_json_list(raw: Optional[str], fallback: list) -> list:
     try:
-        stops = json.loads(ride.stops_json or "[]")
-        if isinstance(stops, list):
-            return stops
+        parsed = json.loads(raw or "[]")
+        if isinstance(parsed, list):
+            return parsed
     except Exception:
         pass
-    return []
+    return fallback
 
 
 # --- PYDANTIC SCHEMAS ---
@@ -154,9 +333,10 @@ class StopItem(BaseModel):
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(..., min_length=3, max_length=40)
+    username: str = Field(..., min_length=2, max_length=60)
     full_name: str = Field(..., min_length=2, max_length=80)
     phone: str = Field(default="", max_length=30)
+    car: str = Field(default="", max_length=80)
     password: str = Field(..., min_length=4, max_length=100)
 
     @field_validator("username", "full_name")
@@ -175,6 +355,8 @@ class LoginRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=80)
     phone: str = Field(default="", max_length=30)
+    car: str = Field(default="", max_length=80)
+    bio: str = Field(default="", max_length=300)
 
 
 class RideCreate(BaseModel):
@@ -186,6 +368,12 @@ class RideCreate(BaseModel):
     dest_lat: float
     dest_lng: float
     stops: List[StopItem] = Field(default_factory=list)
+    ride_date: str = Field(default="")
+    ride_time: str = Field(default="09:00")
+    car_model: str = Field(default="")
+    pickup_point: str = Field(default="")
+    amenities: List[str] = Field(default_factory=lambda: ["ac", "nosmoke", "instant"])
+    notes: str = Field(default="")
     available_seats: int = Field(..., ge=1, le=8)
     price_per_seat: float = Field(..., ge=0)
 
@@ -237,9 +425,14 @@ manager = ConnectionManager()
 
 
 # --- FASTAPI APP ---
-app = FastAPI(title="Споделени Пътувания")
-os.makedirs("static", exist_ok=True)
+app = FastAPI(title="Vozia — Споделено пътуване")
+
+for folder in ("static", "css", "js"):
+    os.makedirs(folder, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/css", StaticFiles(directory="css"), name="css")
+app.mount("/js", StaticFiles(directory="js"), name="js")
 
 app.add_middleware(
     CORSMiddleware,
@@ -271,7 +464,7 @@ def get_optional_user(
 
 def require_user(user: Optional[User] = Depends(get_optional_user)) -> User:
     if not user:
-        raise HTTPException(status_code=401, detail="Само потребители с профил могат да запазват места.")
+        raise HTTPException(status_code=401, detail="Необходим е вход в профил.")
     return user
 
 
@@ -281,10 +474,29 @@ def require_admin(user: User = Depends(require_user)) -> User:
     return user
 
 
-def serialize_ride(ride: Ride) -> dict:
+def serialize_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "phone": user.phone or "",
+        "car": user.car or "",
+        "bio": user.bio or "",
+        "role": user.role,
+    }
+
+
+def serialize_ride(ride: Ride, db: Optional[Session] = None) -> dict:
+    owner_phone = ""
+    if db and ride.owner_user_id:
+        owner = db.query(User).filter(User.id == ride.owner_user_id).first()
+        if owner:
+            owner_phone = owner.phone or ""
+
     return {
         "id": ride.id,
         "driver_name": ride.driver_name,
+        "driver_phone": owner_phone or "+359 88 900 1122",
         "owner_user_id": ride.owner_user_id,
         "origin_name": ride.origin_name,
         "dest_name": ride.dest_name,
@@ -292,7 +504,13 @@ def serialize_ride(ride: Ride) -> dict:
         "origin_lng": ride.origin_lng,
         "dest_lat": ride.dest_lat,
         "dest_lng": ride.dest_lng,
-        "stops": parse_stops(ride),
+        "stops": parse_json_list(ride.stops_json, []),
+        "ride_date": ride.ride_date or date.today().isoformat(),
+        "ride_time": ride.ride_time or "09:00",
+        "car_model": ride.car_model or "Комфортен автомобил",
+        "pickup_point": ride.pickup_point or ride.origin_name,
+        "amenities": parse_json_list(ride.amenities_json, ["ac", "nosmoke"]),
+        "notes": ride.notes or "",
         "total_seats": ride.total_seats,
         "available_seats": ride.available_seats,
         "price_per_seat": ride.price_per_seat,
@@ -313,9 +531,16 @@ def serialize_ride(ride: Ride) -> dict:
     }
 
 
+# --- HTML PAGES ---
 @app.get("/")
-def serve_frontend():
+@app.get("/index.html")
+def serve_landing():
     return FileResponse("index.html")
+
+
+@app.get("/app.html")
+def serve_app():
+    return FileResponse("app.html")
 
 
 # --- AUTH & PROFILE ---
@@ -323,11 +548,13 @@ def serve_frontend():
 def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
     uname = req.username.strip().lower()
     if db.query(User).filter(User.username == uname).first():
-        raise HTTPException(status_code=400, detail="Потребителското име вече е заето.")
+        raise HTTPException(status_code=400, detail="Това потребителско име / имейл вече е заето.")
     user = User(
         username=uname,
         full_name=req.full_name.strip(),
         phone=req.phone.strip(),
+        car=req.car.strip(),
+        bio="Нов член на общността на Vozia.",
         password_hash=hash_password(req.password),
         role="user",
         token=secrets.token_hex(24),
@@ -335,36 +562,19 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {
-        "token": user.token,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "role": user.role,
-        },
-    }
+    return {"token": user.token, "user": serialize_user(user)}
 
 
 @app.post("/api/auth/login")
 def login_user(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == req.username.strip().lower()).first()
+    uname = req.username.strip().lower()
+    user = db.query(User).filter(User.username == uname).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Невалидно потребителско име или парола.")
     if not user.token:
         user.token = secrets.token_hex(24)
         db.commit()
-    return {
-        "token": user.token,
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "role": user.role,
-        },
-    }
+    return {"token": user.token, "user": serialize_user(user)}
 
 
 @app.get("/api/profile")
@@ -379,20 +589,16 @@ def get_profile(user: User = Depends(require_user), db: Session = Depends(get_db
             "ride_id": b.ride_id,
             "driver_name": ride.driver_name if ride else "—",
             "full_route": f"{ride.origin_name} → {ride.dest_name}" if ride else "—",
+            "ride_date": ride.ride_date if ride else "",
+            "ride_time": ride.ride_time if ride else "",
             "segment_start_label": b.segment_start_label,
             "segment_end_label": b.segment_end_label,
             "seats_booked": b.seats_booked,
             "segment_price": b.segment_price,
         })
     return {
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "role": user.role,
-        },
-        "rides": [serialize_ride(r) for r in my_rides],
+        "user": serialize_user(user),
+        "rides": [serialize_ride(r, db) for r in my_rides],
         "bookings": bookings_out,
     }
 
@@ -403,16 +609,10 @@ def update_profile(req: ProfileUpdateRequest, user: User = Depends(require_user)
         raise HTTPException(status_code=400, detail="Името не може да е празно.")
     user.full_name = req.full_name.strip()
     user.phone = req.phone.strip()
+    user.car = req.car.strip()
+    user.bio = req.bio.strip()
     db.commit()
-    return {
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.full_name,
-            "phone": user.phone,
-            "role": user.role,
-        }
-    }
+    return {"user": serialize_user(user)}
 
 
 # --- RIDES & PARTIAL BOOKINGS ---
@@ -430,7 +630,7 @@ def list_rides(
             continue
         if min_seats > 1 and r.available_seats < min_seats:
             continue
-        stops = parse_stops(r)
+        stops = parse_json_list(r.stops_json, [])
         all_places = " ".join([r.origin_name, r.dest_name] + [s.get("name", "") for s in stops]).lower()
         if origin and origin.strip():
             o = origin.strip().lower()
@@ -440,14 +640,14 @@ def list_rides(
             d = destination.strip().lower()
             if d not in r.dest_name.lower() and d not in all_places:
                 continue
-        result.append(serialize_ride(r))
+        result.append(serialize_ride(r, db))
     return result
 
 
 @app.post("/api/rides")
 async def create_ride(
     ride_data: RideCreate,
-    user: Optional[User] = Depends(get_optional_user),
+    user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     stops_sorted = []
@@ -463,8 +663,8 @@ async def create_ride(
     stops_sorted.sort(key=lambda s: s["ratio"])
 
     new_ride = Ride(
-        driver_name=ride_data.driver_name.strip(),
-        owner_user_id=user.id if user else None,
+        driver_name=ride_data.driver_name.strip() or user.full_name,
+        owner_user_id=user.id,
         origin_name=ride_data.origin_name.strip(),
         dest_name=ride_data.dest_name.strip(),
         origin_lat=ride_data.origin_lat,
@@ -472,6 +672,12 @@ async def create_ride(
         dest_lat=ride_data.dest_lat,
         dest_lng=ride_data.dest_lng,
         stops_json=json.dumps(stops_sorted, ensure_ascii=False),
+        ride_date=ride_data.ride_date or date.today().isoformat(),
+        ride_time=ride_data.ride_time or "09:00",
+        car_model=ride_data.car_model.strip() or user.car or "Личен автомобил",
+        pickup_point=ride_data.pickup_point.strip() or ride_data.origin_name.strip(),
+        amenities_json=json.dumps(ride_data.amenities, ensure_ascii=False),
+        notes=ride_data.notes.strip(),
         total_seats=ride_data.available_seats,
         available_seats=ride_data.available_seats,
         price_per_seat=ride_data.price_per_seat,
@@ -482,7 +688,7 @@ async def create_ride(
     db.refresh(new_ride)
 
     await manager.broadcast({"event": "rides_updated"})
-    return {"message": "Пътуването е създадено.", "ride_id": new_ride.id}
+    return {"message": "Пътуването е публикувано.", "ride": serialize_ride(new_ride, db)}
 
 
 @app.post("/api/rides/{ride_id}/book")
@@ -541,7 +747,7 @@ async def book_seat(
 
     await manager.broadcast({"event": "rides_updated"})
     return {
-        "message": f"Запазено ({start_label} → {end_label}) за {total_price:.2f} лв.",
+        "message": f"Запазено ({start_label} → {end_label}) за {total_price:.2f} €",
         "segment_price": total_price,
     }
 
@@ -574,7 +780,7 @@ async def cancel_booking(
 @app.get("/api/admin/rides")
 def admin_list_all_rides(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     rides = db.query(Ride).order_by(Ride.id.desc()).all()
-    return [serialize_ride(r) for r in rides]
+    return [serialize_ride(r, db) for r in rides]
 
 
 @app.patch("/api/admin/rides/{ride_id}/status")

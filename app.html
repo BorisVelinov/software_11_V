@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vozia App — Споделени пътувания</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23059669'/%3E%3Cstop offset='100%25' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' rx='12' fill='url(%23g)'/%3E%3Cpath d='M11 12l9 18 9-18' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='13' r='2.8' fill='%23d1fae5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="app-body">
+
+  <!-- ==================== AUTH GATE (ЗАДЪЛЖИТЕЛЕН ВХОД) ==================== -->
+  <section id="auth-gate" class="auth-gate hidden">
+    <aside class="auth-hero">
+      <a href="index.html" class="brand" style="color:#ffffff;">
+        <span class="brand-mark">
+          <svg width="38" height="38" viewBox="0 0 40 40" fill="none">
+            <rect width="40" height="40" rx="12" fill="#10b981"/>
+            <path d="M11 12.5L20 29.5L29 12.5" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="20" cy="13.5" r="2.6" fill="#d1fae5"/>
+          </svg>
+        </span>
+        Vozia
+      </a>
+
+      <div class="auth-hero-copy">
+        <h1>Влез в профила си, за да пътуваш сигурно.</h1>
+        <p>Достъпът до приложението на Vozia изисква вход, за да гарантираме проверена общност, резервации по отсечки и синхронизация на живо.</p>
+        <ul class="auth-perks">
+          <li><span class="auth-perk-check">✓</span> Интерактивна векторна и сателитна карта на живо</li>
+          <li><span class="auth-perk-check">✓</span> Частични резервации (качване/слизане на междинна спирка)</li>
+          <li><span class="auth-perk-check">✓</span> Реална база данни и обновяване в реално време</li>
+        </ul>
+      </div>
+
+      <div style="font-size:0.85rem; color:var(--slate-400);">
+        <a href="index.html" style="color:#34d399; font-weight:600;">← Обратно към началната страница</a>
+      </div>
+    </aside>
+
+    <div class="auth-panel">
+      <div class="auth-card">
+        <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+          <h2 id="auth-title" style="font-size:1.45rem; font-weight:800;">Добре дошъл обратно</h2>
+          <a href="index.html" style="font-size:0.84rem; color:var(--slate-500); font-weight:600;">Начало</a>
+        </div>
+
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth-tab="login">Вход</button>
+          <button type="button" class="auth-tab" data-auth-tab="register">Регистрация</button>
+        </div>
+
+        <div id="auth-error" class="auth-error hidden"></div>
+
+        <!-- Login Form -->
+        <form id="login-form">
+          <div class="form-group">
+            <label for="login-username">Потребителско име или имейл</label>
+            <input type="text" id="login-username" class="form-control" placeholder="напр. demo или admin" required>
+          </div>
+          <div class="form-group">
+            <label for="login-password">Парола</label>
+            <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full btn-lg">Влез в Vozia</button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="register-form" class="hidden">
+          <div class="form-group">
+            <label for="reg-name">Име и фамилия</label>
+            <input type="text" id="reg-name" class="form-control" placeholder="Иван Георгиев" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-username">Потребителско име / Имейл</label>
+              <input type="text" id="reg-username" class="form-control" placeholder="ivan_g" required>
+            </div>
+            <div class="form-group">
+              <label for="reg-phone">Телефон</label>
+              <input type="tel" id="reg-phone" class="form-control" placeholder="0888 123 456" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="reg-car">Автомобил (по желание)</label>
+            <input type="text" id="reg-car" class="form-control" placeholder="напр. Volkswagen Passat, сив">
+          </div>
+          <div class="form-group">
+            <label for="reg-password">Парола (мин. 4 символа)</label>
+            <input type="password" id="reg-password" class="form-control" placeholder="Създай парола" minlength="4" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-full btn-lg">Създай профил и влез</button>
+        </form>
+
+        <div class="auth-divider">или влез с готов акаунт</div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <button type="button" id="demo-login-btn" class="btn btn-outline btn-sm">
+            Демо профил
+          </button>
+          <button type="button" id="admin-login-btn" class="btn btn-outline btn-sm">
+            Админ вход
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== MAIN APP SHELL ==================== -->
+  <div id="app-shell" class="hidden">
+    <header class="app-header">
+      <a href="index.html" class="brand" title="Към началната страница">
+        <span class="brand-mark">
+          <svg width="34" height="34" viewBox="0 0 40 40" fill="none">
+            <defs>
+              <linearGradient id="appLogoGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#059669"/>
+                <stop offset="1" stop-color="#0ea5e9"/>
+              </linearGradient>
+            </defs>
+            <rect width="40" height="40" rx="12" fill="url(#appLogoGrad)"/>
+            <path d="M11 12.5L20 29.5L29 12.5" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="20" cy="13.5" r="2.6" fill="#d1fae5"/>
+          </svg>
+        </span>
+        Vozia
+      </a>
+
+      <nav class="app-nav">
+        <button type="button" class="app-nav-btn active" data-view="explore">
+          <span>🗺️</span><span class="nav-text">Търсене</span>
+        </button>
+        <button type="button" class="app-nav-btn" data-view="trips">
+          <span>🚗</span><span class="nav-text">Моите пътувания</span>
+          <span class="nav-badge hidden" id="badge-trips">0</span>
+        </button>
+        <button type="button" class="app-nav-btn" data-view="messages">
+          <span>💬</span><span class="nav-text">Съобщения</span>
+          <span class="nav-badge hidden" id="badge-messages">0</span>
+        </button>
+        <button type="button" class="app-nav-btn" data-view="profile">
+          <span>👤</span><span class="nav-text">Профил</span>
+        </button>
+        <button type="button" class="app-nav-btn hidden" id="nav-admin-btn" data-view="admin">
+          <span>🛡️</span><span class="nav-text">Админ</span>
+        </button>
+      </nav>
+
+      <div class="app-header-right">
+        <button type="button" class="btn btn-primary btn-sm" id="open-publish-btn">+ Предложи пътуване</button>
+        <button type="button" class="user-pill" id="header-user-pill" title="Към профила">
+          <span class="avatar" id="header-avatar">АИ</span>
+          <span id="header-user-name">Потребител</span>
+        </button>
+        <button type="button" class="btn btn-ghost btn-sm" id="logout-btn" title="Изход">Изход</button>
+      </div>
+    </header>
+
+    <!-- VIEW 1: EXPLORE & MAP -->
+    <main id="view-explore" class="app-view">
+      <div class="explore-toolbar">
+        <div class="toolbar-row">
+          <div class="toolbar-input-group">
+            <input type="text" id="filter-from" class="form-control" list="app-cities-datalist" placeholder="От град...">
+            <button type="button" class="swap-btn" id="swap-cities-btn" title="Размени градовете">⇄</button>
+            <input type="text" id="filter-to" class="form-control" list="app-cities-datalist" placeholder="До град...">
+          </div>
+
+          <input type="date" id="filter-date" class="form-control toolbar-compact" title="Дата">
+          <select id="filter-seats" class="form-control toolbar-compact">
+            <option value="1">1+ места</option>
+            <option value="2">2+ места</option>
+            <option value="3">3+ места</option>
+            <option value="4">4 места</option>
+          </select>
+          <select id="filter-max-price" class="form-control toolbar-compact">
+            <option value="999">Всяка цена</option>
+            <option value="12">До 12 €</option>
+            <option value="18">До 18 €</option>
+            <option value="25">До 25 €</option>
+            <option value="35">До 35 €</option>
+          </select>
+          <select id="filter-sort" class="form-control toolbar-compact">
+            <option value="soonest">Най-скорошни</option>
+            <option value="cheapest">Най-ниска цена</option>
+            <option value="seats">Най-много места</option>
+          </select>
+          <button type="button" class="btn btn-outline btn-sm" id="reset-filters-btn">Изчисти</button>
+        </div>
+
+        <div class="filter-chips" id="amenity-chips">
+          <button type="button" class="chip" data-chip="stops">📍 С междинни спирки</button>
+          <button type="button" class="chip" data-chip="instant">⚡ Незабавна резервация</button>
+          <button type="button" class="chip" data-chip="ac">❄️ Климатик</button>
+          <button type="button" class="chip" data-chip="nosmoke">🚭 Без пушене</button>
+          <button type="button" class="chip" data-chip="luggage">🧳 Голям багаж</button>
+          <button type="button" class="chip" data-chip="pets">🐾 Домашни любимци</button>
+        </div>
+        <datalist id="app-cities-datalist"></datalist>
+      </div>
+
+      <!-- Mobile List/Map Toggle -->
+      <div class="mobile-view-switch">
+        <button type="button" class="btn btn-dark btn-sm btn-full" id="mob-btn-list">Списък пътувания</button>
+        <button type="button" class="btn btn-outline btn-sm btn-full" id="mob-btn-map">Карта</button>
+      </div>
+
+      <div class="explore-split mobile-show-list" id="explore-split">
+        <section class="rides-pane">
+          <div class="rides-pane-header">
+            <span id="rides-count-label">Намерени пътувания: 0</span>
+            <span style="font-size:0.78rem; color:var(--slate-400);">Кликни за маршрут на картата</span>
+          </div>
+          <div id="rides-list" class="ride-list"></div>
+        </section>
+
+        <section class="map-pane">
+          <div class="map-style-switcher">
+            <button type="button" class="map-style-btn active" data-map-style="vector">Векторна</button>
+            <button type="button" class="map-style-btn" data-map-style="esri-street">Класическа</button>
+            <button type="button" class="map-style-btn" data-map-style="esri-sat">Сателит</button>
+          </div>
+
+          <div id="vozia-map"></div>
+
+          <div class="map-route-hud hidden" id="map-route-hud">
+            <div>
+              <div id="hud-route-title" style="font-weight:800; font-size:0.96rem;"></div>
+              <div id="hud-route-meta" style="font-size:0.82rem; color:var(--slate-500);"></div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="hud-open-details">Детайли / Резервация</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- VIEW 2: MY TRIPS -->
+    <section id="view-trips" class="app-view hidden">
+      <div class="app-page-wrap">
+        <div class="page-title-row">
+          <h1>Моите пътувания</h1>
+          <button type="button" class="btn btn-primary" id="trips-publish-btn">+ Предложи ново пътуване</button>
+        </div>
+
+        <div class="sub-tabs">
+          <button type="button" class="sub-tab active" data-trips-tab="booked">Резервирани от мен</button>
+          <button type="button" class="sub-tab" data-trips-tab="published">Публикувани от мен</button>
+        </div>
+
+        <div id="trips-container" class="trips-grid"></div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: MESSAGES -->
+    <section id="view-messages" class="app-view hidden">
+      <div class="app-page-wrap">
+        <div class="page-title-row">
+          <h1>Съобщения</h1>
+        </div>
+
+        <div class="chat-shell">
+          <aside class="chat-sidebar" id="chat-threads-list"></aside>
+          <div class="chat-main">
+            <div class="chat-main-header" id="chat-active-header">
+              <span>Избери разговор отляво</span>
+            </div>
+            <div class="chat-messages" id="chat-messages-box">
+              <div class="empty-state" style="margin:auto;">Избери разговор или пиши на шофьор от детайлите на пътуване.</div>
+            </div>
+            <form class="chat-input-bar hidden" id="chat-form">
+              <input type="text" id="chat-input" class="form-control" placeholder="Напиши съобщение..." autocomplete="off" required>
+              <button type="submit" class="btn btn-primary">Изпрати</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: PROFILE -->
+    <section id="view-profile" class="app-view hidden">
+      <div class="app-page-wrap">
+        <div class="page-title-row">
+          <h1>Моят профил</h1>
+          <button type="button" class="btn btn-outline" id="profile-logout-btn">Изход от профила</button>
+        </div>
+
+        <div class="profile-grid">
+          <div class="card" style="text-align:center;">
+            <div class="avatar" id="profile-avatar-lg" style="width:76px; height:76px; font-size:1.5rem; margin:0 auto 14px;">АИ</div>
+            <h2 id="profile-display-name" style="font-size:1.25rem; font-weight:800;"></h2>
+            <p id="profile-display-username" style="font-size:0.88rem; color:var(--slate-500); margin-bottom:12px;"></p>
+            <span class="badge badge-green" id="profile-role-badge">✓ Верифициран профил</span>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:22px; padding-top:18px; border-top:1px solid var(--slate-100);">
+              <div>
+                <div style="font-size:1.35rem; font-weight:800;" id="stat-my-bookings">0</div>
+                <div style="font-size:0.78rem; color:var(--slate-500);">Резервации</div>
+              </div>
+              <div>
+                <div style="font-size:1.35rem; font-weight:800;" id="stat-my-published">0</div>
+                <div style="font-size:0.78rem; color:var(--slate-500);">Публикувани</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-bottom:18px;">Лични данни и автомобил</h3>
+            <form id="profile-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="prof-name">Име и фамилия</label>
+                  <input type="text" id="prof-name" class="form-control" required>
+                </div>
+                <div class="form-group">
+                  <label for="prof-phone">Телефон</label>
+                  <input type="tel" id="prof-phone" class="form-control">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="prof-car">Автомобил</label>
+                <input type="text" id="prof-car" class="form-control" placeholder="напр. Skoda Octavia, черен">
+              </div>
+              <div class="form-group">
+                <label for="prof-bio">Кратко представяне</label>
+                <textarea id="prof-bio" class="form-control" rows="3" placeholder="Обичам спокойното каране, хубава музика и точните уговорки."></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary">Запази промените</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 5: ADMIN PANEL -->
+    <section id="view-admin" class="app-view hidden">
+      <div class="app-page-wrap">
+        <div class="page-title-row">
+          <h1>Административен панел</h1>
+          <span class="badge badge-green">Модерация на всички пътувания в базата</span>
+        </div>
+        <div id="admin-rides-container" class="trips-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ==================== MODAL: RIDE DETAILS & SEGMENT BOOKING ==================== -->
+  <div id="ride-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-ride-title" style="font-size:1.25rem; font-weight:800;"></h3>
+        <button type="button" class="modal-close" data-close-modal="ride-modal">×</button>
+      </div>
+      <div id="modal-ride-body"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: PUBLISH RIDE ==================== -->
+  <div id="publish-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size:1.25rem; font-weight:800;">Предложи ново пътуване</h3>
+        <button type="button" class="modal-close" data-close-modal="publish-modal">×</button>
+      </div>
+
+      <form id="publish-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pub-from">От град</label>
+            <input type="text" id="pub-from" class="form-control" list="app-cities-datalist" placeholder="София" required>
+          </div>
+          <div class="form-group">
+            <label for="pub-to">До град</label>
+            <input type="text" id="pub-to" class="form-control" list="app-cities-datalist" placeholder="Варна" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pub-stop">Междинна спирка (по желание)</label>
+          <input type="text" id="pub-stop" class="form-control" list="app-cities-datalist" placeholder="напр. Велико Търново (позволява частични резервации)">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pub-date">Дата</label>
+            <input type="date" id="pub-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="pub-time">Час на тръгване</label>
+            <input type="time" id="pub-time" class="form-control" value="09:00" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pub-price">Цена за целия маршрут (€)</label>
+            <input type="number" id="pub-price" class="form-control" min="1" max="150" step="0.5" value="18" required>
+          </div>
+          <div class="form-group">
+            <label for="pub-seats">Свободни места</label>
+            <select id="pub-seats" class="form-control">
+              <option value="1">1 място</option>
+              <option value="2">2 места</option>
+              <option value="3" selected>3 места</option>
+              <option value="4">4 места</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="pub-car">Автомобил</label>
+            <input type="text" id="pub-car" class="form-control" placeholder="Audi A4, тъмносин" required>
+          </div>
+          <div class="form-group">
+            <label for="pub-pickup">Точка на тръгване</label>
+            <input type="text" id="pub-pickup" class="form-control" placeholder="Централна автогара / Мол" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Удобства и правила</label>
+          <div class="checkbox-grid">
+            <label class="checkbox-pill"><input type="checkbox" name="pub-amenity" value="ac" checked> ❄️ Климатик</label>
+            <label class="checkbox-pill"><input type="checkbox" name="pub-amenity" value="nosmoke" checked> 🚭 Без пушене</label>
+            <label class="checkbox-pill"><input type="checkbox" name="pub-amenity" value="luggage" checked> 🧳 Голям багаж</label>
+            <label class="checkbox-pill"><input type="checkbox" name="pub-amenity" value="instant" checked> ⚡ Незабавна резервация</label>
+            <label class="checkbox-pill"><input type="checkbox" name="pub-amenity" value="pets"> 🐾 Домашни любимци</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pub-notes">Допълнителна информация</label>
+          <textarea id="pub-notes" class="form-control" rows="2" placeholder="Спираме за кратка почивка по пътя..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full btn-lg">Публикувай пътуването</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notifications -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

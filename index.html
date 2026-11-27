@@ -1,1306 +1,461 @@
 <!DOCTYPE html>
 <html lang="bg">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Споделени Пътувания</title>
-    <link rel="icon" href="data:,">
-    <script src="/static/leaflet-global.js"></script>
-    <style>
-        :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg-color: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
-            --border-color: #e5e7eb;
-            --error-color: #ef4444;
-            --success-color: #10b981;
-            --warn-color: #f59e0b;
-        }
-
-        * { box-sizing: border-box; }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            background: var(--bg-color);
-            color: var(--text-main);
-            overflow: hidden;
-        }
-
-        /* Top Navigation Bar */
-        .topbar {
-            height: 58px;
-            background: #ffffff;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 18px;
-            z-index: 2000;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            gap: 12px;
-        }
-
-        .brand {
-            font-size: 18px;
-            font-weight: 800;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            white-space: nowrap;
-            cursor: pointer;
-        }
-
-        .nav-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
-        .nav-btn {
-            background: transparent;
-            color: var(--text-main);
-            border: 1px solid transparent;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            white-space: nowrap;
-        }
-
-        .nav-btn:hover { background: #f3f4f6; }
-        .nav-btn.active {
-            background: #eff6ff;
-            color: var(--primary);
-            border-color: #bfdbfe;
-        }
-
-        .topbar-right { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-
-        .btn-add-top {
-            background: var(--success-color);
-            color: #fff;
-            border: none;
-            padding: 8px 14px;
-            border-radius: 8px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        .btn-add-top:hover { background: #059669; }
-
-        .user-pill {
-            font-size: 12px;
-            font-weight: 600;
-            padding: 6px 10px;
-            border-radius: 999px;
-            background: #f3f4f6;
-            color: var(--text-main);
-            cursor: pointer;
-        }
-
-        .workspace {
-            flex: 1;
-            position: relative;
-            overflow: hidden;
-            height: calc(100vh - 58px);
-        }
-
-        /* Page 1: Home (Full Map + Floating Drawer) */
-        #homePage {
-            display: none;
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-
-        #homePage.active { display: block; }
-
-        #map {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            background: #dce3ea;
-            z-index: 1;
-        }
-
-        .map-drawer {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            width: 390px;
-            max-width: calc(100vw - 32px);
-            max-height: calc(100% - 32px);
-            background: rgba(255, 255, 255, 0.96);
-            backdrop-filter: blur(8px);
-            border-radius: 14px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14);
-            border: 1px solid var(--border-color);
-            z-index: 1100;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .drawer-header {
-            padding: 14px 16px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .drawer-header h3 { margin: 0; font-size: 16px; }
-        .drawer-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
-
-        /* Pages 2..5 */
-        .page-view {
-            display: none;
-            width: 100%;
-            height: 100%;
-            overflow-y: auto;
-            padding: 24px;
-            background: var(--bg-color);
-        }
-
-        .page-view.active { display: block; }
-        .container-narrow { max-width: 980px; margin: 0 auto; }
-
-        .card {
-            background: var(--card-bg);
-            padding: 18px;
-            border-radius: 12px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-            margin-bottom: 16px;
-            border: 1px solid var(--border-color);
-        }
-
-        .card h3 { margin: 0 0 12px 0; font-size: 17px; }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-size: 12px; font-weight: 700; margin-bottom: 4px; color: var(--text-muted); }
-
-        input, select {
-            width: 100%;
-            padding: 9px 11px;
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            font-size: 14px;
-            background: #fff;
-        }
-
-        input.error-input { border-color: var(--error-color); background: #fef2f2; }
-        .error-msg { color: var(--error-color); font-size: 12px; margin-top: 4px; display: none; }
-
-        .row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .row > * { flex: 1; min-width: 160px; }
-
-        button.btn {
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 700;
-            font-size: 13px;
-            cursor: pointer;
-        }
-
-        .btn-primary { background: var(--primary); color: #fff; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-secondary { background: #e5e7eb; color: var(--text-main); }
-        .btn-danger { background: var(--error-color); color: #fff; }
-        .btn-success { background: var(--success-color); color: #fff; }
-        .btn-sm { padding: 6px 10px; font-size: 12px; }
-
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 3px 9px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-            margin-right: 6px;
-        }
-
-        .badge-price { background: #dbeafe; color: #1e40af; }
-        .badge-seats { background: #dcfce7; color: #166534; }
-        .badge-warn { background: #fef3c7; color: #92400e; }
-
-        .ride-item {
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 14px;
-            background: #fff;
-            margin-bottom: 12px;
-        }
-
-        .ride-route { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
-        .ride-meta { font-size: 13px; color: var(--text-muted); margin: 8px 0; line-height: 1.5; }
-        .hint { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
-
-        .segment-box {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
-            border-radius: 8px;
-            padding: 12px;
-            margin-top: 10px;
-        }
-
-        .auth-notice {
-            background: #fffbeb;
-            border: 1px solid #fde68a;
-            color: #92400e;
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            margin-top: 10px;
-        }
-
-        /* Pop-up Map Inspector Modal */
-        .modal-backdrop {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.55);
-            z-index: 3000;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-        }
-
-        .modal-backdrop.open { display: flex; }
-
-        .modal-card {
-            background: #fff;
-            border-radius: 14px;
-            width: 100%;
-            max-width: 780px;
-            max-height: 90vh;
-            overflow-y: auto;
-            padding: 20px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
-        }
-
-        .modal-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 12px;
-            margin-bottom: 16px;
-        }
-
-        .modal-header h3 { margin: 0; font-size: 18px; }
-
-        #inspectorMap {
-            width: 100%;
-            height: 320px;
-            border-radius: 10px;
-            background: #e5e7eb;
-            margin-bottom: 14px;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* Leaflet Layout CSS */
-        .leaflet-pane, .leaflet-tile, .leaflet-marker-icon, .leaflet-marker-shadow, .leaflet-tile-container, .leaflet-pane > svg, .leaflet-pane > canvas, .leaflet-zoom-box, .leaflet-image-layer, .leaflet-layer { position: absolute; left: 0; top: 0; }
-        .leaflet-container { overflow: hidden; font-family: "Helvetica Neue", Arial, Helvetica, sans-serif; font-size: 12px; background: #ddd; outline: 0; touch-action: none; }
-        .leaflet-tile { user-select: none; -webkit-user-drag: none; }
-        .leaflet-tile-pane { z-index: 200; } .leaflet-overlay-pane { z-index: 400; } .leaflet-shadow-pane { z-index: 500; } .leaflet-marker-pane { z-index: 600; } .leaflet-tooltip-pane { z-index: 650; } .leaflet-popup-pane { z-index: 700; }
-        .leaflet-control-container { position: relative; z-index: 800; pointer-events: none; }
-        .leaflet-top, .leaflet-bottom { position: absolute; z-index: 1000; pointer-events: none; }
-        .leaflet-top { top: 10px; } .leaflet-bottom { bottom: 10px; } .leaflet-left { left: 10px; } .leaflet-right { right: 10px; }
-        .leaflet-control { pointer-events: auto; position: relative; z-index: 800; background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
-        .leaflet-bar a { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; text-decoration: none; color: black; border-bottom: 1px solid #eee; }
-        .leaflet-bar a:hover { background-color: #f9fafb; }
-        .leaflet-control-attribution { padding: 4px 8px; background: rgba(255, 255, 255, 0.9); font-size: 11px; border-radius: 4px; }
-        .leaflet-popup { position: absolute; text-align: center; margin-bottom: 20px; }
-        .leaflet-popup-content-wrapper { padding: 4px; border-radius: 12px; background: white; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-        .leaflet-popup-content { margin: 12px 16px; line-height: 1.4; text-align: center; }
-        .leaflet-popup-close-button { position: absolute; top: 8px; right: 10px; text-decoration: none; color: #9ca3af; font-size: 18px; font-weight: bold; }
-        .leaflet-grab { cursor: grab; } .leaflet-dragging .leaflet-grab { cursor: grabbing; }
-
-        .btn-yes { background: var(--success-color) !important; color: #fff !important; padding: 6px 12px !important; border: none; border-radius: 6px; cursor: pointer; margin-right: 6px; }
-        .btn-no { background: var(--error-color) !important; color: #fff !important; padding: 6px 12px !important; border: none; border-radius: 6px; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vozia — Споделено пътуване в България</title>
+  <meta name="description" content="Пътувай интелигентно между градовете в България с Vozia. Верифицирани шофьори, прозрачни цени и карта в реално време.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23059669'/%3E%3Cstop offset='100%25' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='40' height='40' rx='12' fill='url(%23g)'/%3E%3Cpath d='M11 12l9 18 9-18' fill='none' stroke='white' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='13' r='2.8' fill='%23d1fae5'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-<header class="topbar">
-    <div class="brand" onclick="switchPage('home')">🗺️ Споделени Пътувания</div>
+  <!-- Header -->
+  <header class="site-header" id="site-header">
+    <div class="container nav-inner">
+      <a href="index.html" class="brand">
+        <span class="brand-mark">
+          <svg width="38" height="38" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="voziaGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#059669"/>
+                <stop offset="1" stop-color="#0ea5e9"/>
+              </linearGradient>
+            </defs>
+            <rect width="40" height="40" rx="12" fill="url(#voziaGrad)"/>
+            <path d="M11 12.5L20 29.5L29 12.5" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="20" cy="13.5" r="2.6" fill="#d1fae5"/>
+          </svg>
+        </span>
+        Vozia
+        <span class="brand-tag">BG</span>
+      </a>
 
-    <nav class="nav-tabs">
-        <button class="nav-btn active" id="nav-home" onclick="switchPage('home')">Начало</button>
-        <button class="nav-btn" id="nav-search" onclick="switchPage('search')">Търсене</button>
-        <button class="nav-btn" id="nav-create" onclick="switchPage('create')">Създаване</button>
-        <button class="nav-btn" id="nav-profile" onclick="switchPage('profile')">Профил</button>
-        <button class="nav-btn" id="nav-admin" onclick="switchPage('admin')" style="display:none;">Админ</button>
-    </nav>
+      <nav class="nav-links">
+        <a href="#how-it-works">Как работи</a>
+        <a href="#popular-routes">Маршрути</a>
+        <a href="#calculator">Калкулатор</a>
+        <a href="#safety">Сигурност</a>
+        <a href="#faq">Въпроси</a>
+      </nav>
 
-    <div class="topbar-right">
-        <span class="user-pill" id="topbarUserBadge" onclick="switchPage('profile')">Гост (Вход)</span>
-        <button class="btn-add-top" onclick="switchPage('create')">+ Добави пътуване</button>
+      <div class="nav-actions" id="landing-nav-actions">
+        <a href="app.html" class="btn btn-outline">Вход</a>
+        <a href="app.html?mode=register" class="btn btn-primary">Към приложението</a>
+      </div>
+
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Меню">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
-</header>
+  </header>
 
-<div class="workspace">
-
-    <!-- PAGE 1: HOME (MAP) -->
-    <section id="homePage" class="active">
-        <div id="map"></div>
-
-        <div class="map-drawer">
-            <div class="drawer-header">
-                <h3>Активни маршрути</h3>
-                <button class="btn btn-secondary btn-sm" onclick="toggleDrawer()">Свий / Разпъни</button>
-            </div>
-            <div class="drawer-body" id="homeDrawerBody">
-                <p class="hint">Кликни върху картата за избор на точки или избери пътуване от списъка.</p>
-                <div id="homeRidesList">Зареждане...</div>
-            </div>
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="hero-badge-dot"></span>
+          Над 45 града в България · Интерактивна карта на живо
         </div>
-    </section>
+        <h1>Сподели пътя. <span>Спести до 65%</span> от всяко пътуване.</h1>
+        <p class="hero-subtitle">
+          Vozia свързва проверени шофьори със свободни места и пътници в същата посока. Без скрити такси, с прозрачни маршрути и директен чат.
+        </p>
+      </div>
 
-    <!-- PAGE 2: SEARCH WITHOUT MAP -->
-    <section id="searchPage" class="page-view">
-        <div class="container-narrow">
-            <div class="card">
-                <h3>Търсене на пътуване (без карта)</h3>
-                <p class="hint">Търси по начален град, крайна точка или спирка. Когато харесаш пътуване, натисни <b>„Виж на картата“</b>, за да се отвори попъп картата.</p>
-                <div class="row">
-                    <div class="form-group">
-                        <label>Откъде</label>
-                        <input type="text" id="searchOrigin" placeholder="Напр. София">
-                    </div>
-                    <div class="form-group">
-                        <label>Докъде</label>
-                        <input type="text" id="searchDest" placeholder="Напр. Велико Търново или Варна">
-                    </div>
-                    <div class="form-group" style="max-width: 150px;">
-                        <label>Мин. места</label>
-                        <input type="number" id="searchMinSeats" value="1" min="1" max="8">
-                    </div>
-                </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                    <button class="btn btn-primary" onclick="runSearch()">Търси</button>
-                    <button class="btn btn-secondary" onclick="resetSearch()">Изчисти</button>
-                </div>
-            </div>
-            <div id="searchResultsList">Зареждане...</div>
-        </div>
-    </section>
+      <div class="hero-search-card">
+        <form class="hero-search-form" id="hero-search-form">
+          <div class="search-field">
+            <label for="home-from">От град</label>
+            <input type="text" id="home-from" list="bg-cities-datalist" placeholder="напр. София" autocomplete="off">
+          </div>
+          <div class="search-field">
+            <label for="home-to">До град</label>
+            <input type="text" id="home-to" list="bg-cities-datalist" placeholder="напр. Варна" autocomplete="off">
+          </div>
+          <div class="search-field">
+            <label for="home-date">Дата</label>
+            <input type="date" id="home-date">
+          </div>
+          <div class="search-field">
+            <label for="home-seats">Места</label>
+            <select id="home-seats">
+              <option value="1">1 пътник</option>
+              <option value="2">2 пътници</option>
+              <option value="3">3 пътници</option>
+              <option value="4">4 пътници</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary btn-lg">Търси</button>
+        </form>
+        <datalist id="bg-cities-datalist"></datalist>
+      </div>
 
-    <!-- PAGE 3: CREATE RIDE PAGE -->
-    <section id="createPage" class="page-view">
-        <div class="container-narrow">
-            <div class="card">
-                <h3>Създаване на споделено пътуване</h3>
-                <p class="hint">Потърси адрес или кликни на картата (страница <b>Начало</b>), за да зададеш начална и крайна точка, и добави междинни спирки по маршрута.</p>
-
-                <div class="row">
-                    <div class="form-group">
-                        <label>Търси адрес на картата</label>
-                        <div style="display:flex; gap:8px;">
-                            <input type="text" id="createSearchInput" placeholder="Напр. София, Велико Търново, Варна...">
-                            <button class="btn btn-secondary" type="button" onclick="searchAddressAndGoMap()">🔍 Карта</button>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Име на шофьора</label>
-                        <input type="text" id="driverName" placeholder="Въведи име">
-                        <div class="error-msg" id="err-driverName">Моля, въведи име на шофьора.</div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="form-group">
-                        <label>Начална точка</label>
-                        <input type="text" id="originName" placeholder="Избери от картата..." readonly style="background:#f9fafb;">
-                        <div class="error-msg" id="err-originName">Избери начална точка на картата.</div>
-                    </div>
-                    <div class="form-group">
-                        <label>Крайна точка</label>
-                        <input type="text" id="destName" placeholder="Избери от картата..." readonly style="background:#f9fafb;">
-                        <div class="error-msg" id="err-destName">Избери крайна точка на картата.</div>
-                    </div>
-                </div>
-
-                <div class="segment-box">
-                    <label style="margin-bottom:6px;">Междинни спирки (по избор)</label>
-                    <div class="row">
-                        <input type="text" id="stopNameInput" placeholder="Име на спирка (напр. Велико Търново)">
-                        <button class="btn btn-secondary btn-sm" type="button" onclick="addStopFromLastPin()">+ Добави последния потвърден пин като спирка</button>
-                    </div>
-                    <div id="stopsPreview" class="hint" style="margin-top:8px; margin-bottom:0;">Няма добавени спирки.</div>
-                </div>
-
-                <div class="row" style="margin-top:12px;">
-                    <div class="form-group">
-                        <label>Свободни места</label>
-                        <input type="number" id="seats" value="3" min="1" max="8">
-                    </div>
-                    <div class="form-group">
-                        <label>Цена за целия маршрут / място (лв.)</label>
-                        <input type="number" id="price" placeholder="Напр. 25.00" min="0" step="0.5">
-                        <div class="error-msg" id="err-price">Въведи валидна цена.</div>
-                    </div>
-                </div>
-
-                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                    <button class="btn btn-secondary" type="button" onclick="switchPage('home')">Избери точки на картата</button>
-                    <button class="btn btn-primary" type="button" onclick="createRide()">Публикувай пътуване</button>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- PAGE 4: PROFILE PAGE -->
-    <section id="profilePage" class="page-view">
-        <div class="container-narrow">
-            <div id="authSection" class="card">
-                <h3>Вход или регистрация</h3>
-                <p class="hint">Само потребители с профил могат да запазват места в споделени пътувания.</p>
-                <div class="row">
-                    <div class="card" style="margin-bottom:0;">
-                        <h4 style="margin-top:0;">Вход</h4>
-                        <div class="form-group">
-                            <label>Потребителско име</label>
-                            <input type="text" id="loginUsername" placeholder="admin">
-                        </div>
-                        <div class="form-group">
-                            <label>Парола</label>
-                            <input type="password" id="loginPassword" placeholder="Парола">
-                        </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            <button class="btn btn-primary" onclick="login()">Вход</button>
-                            <button class="btn btn-secondary btn-sm" onclick="quickAdminLogin()">Бърз Админ вход</button>
-                        </div>
-                        <div class="error-msg" id="err-login"></div>
-                    </div>
-
-                    <div class="card" style="margin-bottom:0;">
-                        <h4 style="margin-top:0;">Регистрация на нов профил</h4>
-                        <div class="form-group">
-                            <label>Потребителско име</label>
-                            <input type="text" id="regUsername" placeholder="petar_k">
-                        </div>
-                        <div class="form-group">
-                            <label>Пълно име</label>
-                            <input type="text" id="regFullName" placeholder="Петър Колев">
-                        </div>
-                        <div class="form-group">
-                            <label>Телефон</label>
-                            <input type="text" id="regPhone" placeholder="+359 88 ...">
-                        </div>
-                        <div class="form-group">
-                            <label>Парола</label>
-                            <input type="password" id="regPassword" placeholder="Парола">
-                        </div>
-                        <button class="btn btn-success" onclick="registerUser()">Създай профил</button>
-                        <div class="error-msg" id="err-reg"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="accountSection" style="display:none;">
-                <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                        <div>
-                            <h3 style="margin-bottom:4px;">Моят профил</h3>
-                            <div class="hint" id="profileRoleBadge" style="margin:0;"></div>
-                        </div>
-                        <button class="btn btn-secondary" onclick="logout()">Изход</button>
-                    </div>
-                    <div class="row" style="margin-top:12px;">
-                        <div class="form-group">
-                            <label>Потребителско име</label>
-                            <input type="text" id="profUsername" readonly style="background:#f9fafb;">
-                        </div>
-                        <div class="form-group">
-                            <label>Име</label>
-                            <input type="text" id="profFullName">
-                        </div>
-                        <div class="form-group">
-                            <label>Телефон</label>
-                            <input type="text" id="profPhone">
-                        </div>
-                    </div>
-                    <button class="btn btn-primary" onclick="saveProfile()">Запази промените</button>
-                </div>
-
-                <div class="card">
-                    <h3>Моите резервации</h3>
-                    <div id="myBookingsList">Нямаш резервации.</div>
-                </div>
-
-                <div class="card">
-                    <h3>Моите пътувания</h3>
-                    <div id="myRidesList">Нямаш публикувани пътувания.</div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- PAGE 5: ADMIN PAGE -->
-    <section id="adminPage" class="page-view">
-        <div class="container-narrow">
-            <div class="card">
-                <h3>Административен панел</h3>
-                <div id="adminRidesList">Зареждане...</div>
-            </div>
-        </div>
-    </section>
-</div>
-
-<!-- POP-UP MAP INSPECTOR & SEGMENT BOOKING -->
-<div class="modal-backdrop" id="rideInspectorModal">
-    <div class="modal-card">
-        <div class="modal-header">
-            <h3 id="inspectorTitle">Маршрут и резервация</h3>
-            <button class="btn btn-secondary btn-sm" onclick="closeInspectorModal()">✕</button>
-        </div>
-        <div id="inspectorMap"></div>
-        <div id="inspectorBody"></div>
+      <div class="hero-trust-row">
+        <span class="hero-trust-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Верифицирани профили
+        </span>
+        <span class="hero-trust-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Незабавна резервация
+        </span>
+        <span class="hero-trust-item">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          0% комисиона за пътници
+        </span>
+      </div>
     </div>
-</div>
+  </section>
 
-<script>
-    const STORAGE_TOKEN_KEY = 'rideshare_token';
-    let authToken = localStorage.getItem(STORAGE_TOKEN_KEY) || null;
-    let currentUser = null;
-    let allRidesCache = [];
+  <!-- Stats -->
+  <section class="stats-section">
+    <div class="container stats-grid">
+      <div>
+        <div class="stat-value">48 500+</div>
+        <div class="stat-label">Успешни споделени пътувания</div>
+      </div>
+      <div>
+        <div class="stat-value">4.92 / 5</div>
+        <div class="stat-label">Средна оценка на шофьорите</div>
+      </div>
+      <div>
+        <div class="stat-value">310 тона</div>
+        <div class="stat-label">Спестени CO₂ емисии</div>
+      </div>
+      <div>
+        <div class="stat-value">24/7</div>
+        <div class="stat-label">Достъп до карта и маршрути</div>
+      </div>
+    </div>
+  </section>
 
-    let pickupCoords = null;
-    let dropoffCoords = null;
-    let draftStops = [];
-    let lastConfirmedPin = null;
-    let tempMarkers = [];
-    let pendingMarker = null;
-    let pendingLocationData = null;
+  <!-- How It Works -->
+  <section class="section" id="how-it-works">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Как работи Vozia</span>
+        <h2>От търсене до тръгване за по-малко от 2 минути</h2>
+        <p>Създадохме платформата така, че да бъде максимално бърза, сигурна и удобна както за пътници, така и за шофьори.</p>
+      </div>
 
-    let map = null;
-    let routeLayers = null;
-    let inspectorMap = null;
-    let inspectorLayers = null;
+      <div class="cards-3">
+        <article class="card">
+          <div class="icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
+          </div>
+          <h3>1. Избери маршрут и сравнявай</h3>
+          <p>Виж всички активни пътувания директно върху векторна карта с точно разстояние, час на тръгване, модел автомобил и екстри.</p>
+        </article>
 
-    function esc(str) {
-        return String(str ?? '')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
+        <article class="card">
+          <div class="icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>2. Резервирай място сигурно</h3>
+          <p>Запази желания брой места с един клик и уточни точната точка на качване чрез вградения чат директно с шофьора.</p>
+        </article>
 
-    function authHeaders() {
-        const h = { 'Content-Type': 'application/json' };
-        if (authToken) h['Authorization'] = `Bearer ${authToken}`;
-        return h;
-    }
+        <article class="card">
+          <div class="icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l3 7h7l-5.5 4.2L18.5 21 12 16.8 5.5 21l2-7.8L2 9h7l3-7z" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>3. Пътувай и оцени опита</h3>
+          <p>Разделете разходите за гориво честно, пристигнете комфортно и оставете оценка, която поддържа общността надеждна.</p>
+        </article>
+      </div>
+    </div>
+  </section>
 
-    function syncMainMapSize() {
-        if (!map) return;
-        requestAnimationFrame(() => map.invalidateSize());
-        setTimeout(() => { if (map) map.invalidateSize(); }, 120);
-    }
+  <!-- Popular Routes -->
+  <section class="section section-muted" id="popular-routes">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Популярни направления</span>
+        <h2>Най-търсените маршрути тази седмица</h2>
+        <p>Избери маршрут, за да влезеш директно в приложението с вече филтрирани предложения.</p>
+      </div>
 
-    function switchPage(pageName) {
-        const pages = {
-            home: 'homePage',
-            search: 'searchPage',
-            create: 'createPage',
-            profile: 'profilePage',
-            admin: 'adminPage',
-        };
-        Object.entries(pages).forEach(([key, id]) => {
-            document.getElementById(id).classList.toggle('active', key === pageName);
-            const navBtn = document.getElementById(`nav-${key}`);
-            if (navBtn) navBtn.classList.toggle('active', key === pageName);
-        });
+      <div class="routes-grid" id="popular-routes-grid">
+        <!-- Попълва се динамично от js/landing.js -->
+      </div>
+    </div>
+  </section>
 
-        if (pageName === 'home') {
-            initMainMap();
-            syncMainMapSize();
-        } else if (pageName === 'search') {
-            renderSearchResults(allRidesCache);
-        } else if (pageName === 'create') {
-            if (currentUser && !document.getElementById('driverName').value) {
-                document.getElementById('driverName').value = currentUser.full_name;
-            }
-        } else if (pageName === 'profile') {
-            loadProfile();
-        } else if (pageName === 'admin') {
-            loadAdminRides();
-        }
-    }
+  <!-- Interactive Savings Calculator -->
+  <section class="section" id="calculator">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Калкулатор за спестявания</span>
+        <h2>Изчисли колко пестиш с Vozia</h2>
+        <p>Шофираш сам? Сподели свободните си места и покрий почти цялото гориво.</p>
+      </div>
 
-    function toggleDrawer() {
-        const body = document.getElementById('homeDrawerBody');
-        body.style.display = body.style.display === 'none' ? 'block' : 'none';
-    }
+      <div class="calc-box">
+        <div class="calc-controls">
+          <div class="calc-group">
+            <label for="calc-route">Избери маршрут</label>
+            <select id="calc-route">
+              <option value="440|22">София ↔ Варна (440 км)</option>
+              <option value="385|19">София ↔ Бургас (385 км)</option>
+              <option value="145|9">София ↔ Пловдив (145 км)</option>
+              <option value="225|13">София ↔ Велико Търново (225 км)</option>
+              <option value="260|14">Пловдив ↔ Бургас (260 км)</option>
+              <option value="195|11">Варна ↔ Русе (195 км)</option>
+            </select>
+          </div>
 
-    // --- AUTH & PROFILE ---
-    async function refreshCurrentUser() {
-        if (!authToken) {
-            currentUser = null;
-            updateTopbarUser();
-            return;
-        }
-        try {
-            const res = await fetch('/api/profile', { headers: authHeaders() });
-            if (!res.ok) {
-                authToken = null;
-                localStorage.removeItem(STORAGE_TOKEN_KEY);
-                currentUser = null;
-                updateTopbarUser();
-                return;
-            }
-            const data = await res.json();
-            currentUser = data.user;
-            updateTopbarUser();
-            renderAccountData(data);
-        } catch (e) { console.error(e); }
-    }
+          <div class="calc-group">
+            <label for="calc-seats">Свободни места, които споделяш: <strong id="calc-seats-label">3 места</strong></label>
+            <input type="range" id="calc-seats" min="1" max="4" value="3">
+          </div>
 
-    function updateTopbarUser() {
-        const badge = document.getElementById('topbarUserBadge');
-        const adminNav = document.getElementById('nav-admin');
-        if (currentUser) {
-            badge.textContent = currentUser.role === 'admin'
-                ? `🛡️ ${currentUser.full_name} (Админ)`
-                : `👤 ${currentUser.full_name}`;
-            adminNav.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
-        } else {
-            badge.textContent = 'Гост (Вход)';
-            adminNav.style.display = 'none';
-        }
-        renderHomeRides(allRidesCache);
-        if (document.getElementById('searchPage').classList.contains('active')) {
-            renderSearchResults(allRidesCache);
-        }
-    }
+          <div class="calc-group">
+            <label for="calc-trips">Пътувания на месец: <strong id="calc-trips-label">4 пътувания</strong></label>
+            <input type="range" id="calc-trips" min="1" max="16" value="4">
+          </div>
+        </div>
 
-    async function login() {
-        const errEl = document.getElementById('err-login');
-        errEl.style.display = 'none';
-        const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: document.getElementById('loginUsername').value.trim(),
-                password: document.getElementById('loginPassword').value,
-            }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            errEl.textContent = data.detail || 'Грешка при вход.';
-            errEl.style.display = 'block';
-            return;
-        }
-        authToken = data.token;
-        localStorage.setItem(STORAGE_TOKEN_KEY, authToken);
-        await refreshCurrentUser();
-        loadProfile();
-    }
+        <div class="calc-result">
+          <div class="calc-result-label">Приблизително спестяване / месец</div>
+          <div class="calc-result-amount" id="calc-output">264 €</div>
+          <div class="calc-result-sub" id="calc-subtext">Около 66 € на пътуване при 3 пътници</div>
+          <a href="app.html?intent=publish" class="btn btn-primary btn-lg">Предложи пътуване</a>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    async function quickAdminLogin() {
-        document.getElementById('loginUsername').value = 'admin';
-        document.getElementById('loginPassword').value = 'admin123';
-        await login();
-    }
+  <!-- Safety -->
+  <section class="section section-muted" id="safety">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Сигурност и доверие</span>
+        <h2>Проектирана за спокойствие на всеки километър</h2>
+      </div>
 
-    async function registerUser() {
-        const errEl = document.getElementById('err-reg');
-        errEl.style.display = 'none';
-        const res = await fetch('/api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                username: document.getElementById('regUsername').value.trim(),
-                full_name: document.getElementById('regFullName').value.trim(),
-                phone: document.getElementById('regPhone').value.trim(),
-                password: document.getElementById('regPassword').value,
-            }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-            errEl.textContent = data.detail || 'Грешка при регистрация.';
-            errEl.style.display = 'block';
-            return;
-        }
-        authToken = data.token;
-        localStorage.setItem(STORAGE_TOKEN_KEY, authToken);
-        await refreshCurrentUser();
-        loadProfile();
-    }
+      <div class="safety-grid">
+        <div class="safety-item">
+          <div class="icon-box" style="margin-bottom:0; flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div>
+            <h3>Задължителна регистрация</h3>
+            <p>Достъпът до приложението, контактите и чата е защитен с личен профил, за да знаеш винаги с кого пътуваш.</p>
+          </div>
+        </div>
 
-    function logout() {
-        authToken = null;
-        currentUser = null;
-        localStorage.removeItem(STORAGE_TOKEN_KEY);
-        updateTopbarUser();
-        loadProfile();
-        switchPage('home');
-    }
+        <div class="safety-item">
+          <div class="icon-box" style="margin-bottom:0; flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <div>
+            <h3>Директен чат в платформата</h3>
+            <p>Уговаряй багаж, спирки и точния час на тръгване вътре във Vozia, без да споделяш лични социални мрежи.</p>
+          </div>
+        </div>
 
-    async function loadProfile() {
-        if (!authToken) {
-            document.getElementById('authSection').style.display = 'block';
-            document.getElementById('accountSection').style.display = 'none';
-            return;
-        }
-        const res = await fetch('/api/profile', { headers: authHeaders() });
-        if (!res.ok) { logout(); return; }
-        const data = await res.json();
-        currentUser = data.user;
-        updateTopbarUser();
-        document.getElementById('authSection').style.display = 'none';
-        document.getElementById('accountSection').style.display = 'block';
-        renderAccountData(data);
-    }
+        <div class="safety-item">
+          <div class="icon-box" style="margin-bottom:0; flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </div>
+          <div>
+            <h3>Прецизни маршрути на карта</h3>
+            <p>Виж точния път, времетраене и километри с модерна векторна и сателитна карта преди да потвърдиш резервацията.</p>
+          </div>
+        </div>
 
-    function renderAccountData(data) {
-        const u = data.user;
-        document.getElementById('profUsername').value = u.username;
-        document.getElementById('profFullName').value = u.full_name;
-        document.getElementById('profPhone').value = u.phone || '';
-        document.getElementById('profileRoleBadge').textContent =
-            `Роля: ${u.role === 'admin' ? 'Администратор' : 'Потребител'}`;
+        <div class="safety-item">
+          <div class="icon-box" style="margin-bottom:0; flex-shrink:0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>Гъвкаво анулиране</h3>
+            <p>Промениха се плановете ти? Управлявай резервациите и публикуваните си пътувания с един клик в „Моите пътувания“.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-        const bookingsEl = document.getElementById('myBookingsList');
-        bookingsEl.innerHTML = (!data.bookings || !data.bookings.length)
-            ? '<p class="hint">Все още нямаш направени резервации.</p>'
-            : data.bookings.map(b => `
-                <div class="ride-item">
-                    <div class="ride-route">${esc(b.segment_start_label)} → ${esc(b.segment_end_label)}</div>
-                    <div class="ride-meta">Пълен маршрут: <b>${esc(b.full_route)}</b> · Шофьор: ${esc(b.driver_name)} · Места: <b>${b.seats_booked}</b> · Цена: <b>${Number(b.segment_price).toFixed(2)} лв.</b></div>
-                    <button class="btn btn-danger btn-sm" onclick="cancelBooking(${b.id})">Откажи резервация</button>
-                </div>
-            `).join('');
+  <!-- Testimonials -->
+  <section class="section">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Отзиви</span>
+        <h2>Хиляди българи вече пътуват с Vozia</h2>
+      </div>
 
-        const ridesEl = document.getElementById('myRidesList');
-        ridesEl.innerHTML = (!data.rides || !data.rides.length)
-            ? '<p class="hint">Все още нямаш публикувани пътувания.</p>'
-            : data.rides.map(r => `
-                <div class="ride-item">
-                    <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
-                    <div class="ride-meta">Свободни места: ${r.available_seats}/${r.total_seats} · Цена: ${Number(r.price_per_seat).toFixed(2)} лв.</div>
-                    <button class="btn btn-secondary btn-sm" onclick="openRideInspector(${r.id})">Виж на картата</button>
-                </div>
-            `).join('');
-    }
-
-    async function saveProfile() {
-        const res = await fetch('/api/profile', {
-            method: 'PUT',
-            headers: authHeaders(),
-            body: JSON.stringify({
-                full_name: document.getElementById('profFullName').value.trim(),
-                phone: document.getElementById('profPhone').value.trim(),
-            }),
-        });
-        if (res.ok) { alert('Профилът е обновен.'); await refreshCurrentUser(); }
-    }
-
-    async function cancelBooking(bookingId) {
-        const res = await fetch(`/api/bookings/${bookingId}`, { method: 'DELETE', headers: authHeaders() });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Неуспешно отказване.'); return; }
-        await fetchRides();
-        if (document.getElementById('profilePage').classList.contains('active')) loadProfile();
-        if (document.getElementById('adminPage').classList.contains('active')) loadAdminRides();
-    }
-
-    // --- ADMIN ---
-    async function loadAdminRides() {
-        const container = document.getElementById('adminRidesList');
-        const res = await fetch('/api/admin/rides', { headers: authHeaders() });
-        if (!res.ok) { container.innerHTML = '<p class="hint">Нямаш администраторски достъп.</p>'; return; }
-        const rides = await res.json();
-        if (!rides.length) { container.innerHTML = '<p class="hint">Няма създадени пътувания.</p>'; return; }
-
-        container.innerHTML = rides.map(r => {
-            const paxHtml = (r.passengers || []).map(p => `
-                <li>${esc(p.name)} (${p.seats} м.) — <i>${esc(p.segment_start_label)} → ${esc(p.segment_end_label)}</i> (${Number(p.segment_price).toFixed(2)} лв.)
-                <button class="btn btn-secondary btn-sm" style="margin-left:6px;" onclick="cancelBooking(${p.id})">Откажи</button></li>
-            `).join('');
-            return `
-                <div class="ride-item">
-                    <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <div>
-                            <div class="ride-route">#${r.id} · ${esc(r.origin_name)} → ${esc(r.dest_name)}</div>
-                            <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b> · Места: ${r.available_seats}/${r.total_seats} · Цена: ${Number(r.price_per_seat).toFixed(2)} лв. · Статус: <b>${esc(r.status)}</b></div>
-                        </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                            <button class="btn btn-secondary btn-sm" onclick="openRideInspector(${r.id})">Карта</button>
-                            <button class="btn btn-secondary btn-sm" onclick="adminSetStatus(${r.id}, '${r.status === 'cancelled' ? 'open' : 'cancelled'}')">${r.status === 'cancelled' ? 'Отвори' : 'Отмени'}</button>
-                            <button class="btn btn-danger btn-sm" onclick="adminDeleteRide(${r.id})">Изтрий</button>
-                        </div>
-                    </div>
-                    ${paxHtml ? `<ul style="margin:8px 0 0 18px; font-size:13px;">${paxHtml}</ul>` : ''}
-                </div>
-            `;
-        }).join('');
-    }
-
-    async function adminSetStatus(rideId, status) {
-        const res = await fetch(`/api/admin/rides/${rideId}/status`, {
-            method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ status }),
-        });
-        if (res.ok) { await fetchRides(); loadAdminRides(); }
-    }
-
-    async function adminDeleteRide(rideId) {
-        if (!confirm('Сигурен ли си, че искаш да изтриеш това пътуване?')) return;
-        const res = await fetch(`/api/admin/rides/${rideId}`, { method: 'DELETE', headers: authHeaders() });
-        if (res.ok) { await fetchRides(); loadAdminRides(); }
-    }
-
-    // --- MAP & GEOCODING ---
-    function createPinIcon(color) {
-        if (typeof L === 'undefined') return null;
-        return new L.DivIcon({
-            html: `<div style="width:18px;height:18px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.4);"></div>`,
-            className: '', iconSize: [24, 24], iconAnchor: [12, 12],
-        });
-    }
-
-    function addReliableTileLayer(targetMap) {
-        const primaryUrl = 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png';
-        const fallbackUrl = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-        let switched = false;
-        const layer = new L.TileLayer(primaryUrl, {
-            subdomains: 'abc',
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-        });
-        layer.on('tileerror', () => {
-            if (!switched) {
-                switched = true;
-                layer.setUrl(fallbackUrl);
-            }
-        });
-        layer.addTo(targetMap);
-        return layer;
-    }
-
-    function createBaseMap(containerId, center = [42.7339, 25.4858], zoom = 7) {
-        if (typeof L === 'undefined') {
-            document.getElementById(containerId).innerHTML = '<p style="padding:16px;color:#b91c1c;"><b>Картата не можа да се зареди</b> (провери /static/leaflet-global.js).</p>';
-            return null;
-        }
-        const m = new L.Map(containerId).setView(center, zoom);
-        addReliableTileLayer(m);
-        return m;
-    }
-
-    function initMainMap() {
-        if (map) return;
-        map = createBaseMap('map', [42.7339, 25.4858], 7);
-        if (!map) return;
-        routeLayers = new L.LayerGroup().addTo(map);
-        map.on('click', e => handleLocationSelection(e.latlng.lat, e.latlng.lng));
-        if (allRidesCache[0]) drawRouteOnLayerGroup(allRidesCache[0], routeLayers, '#2563eb');
-        syncMainMapSize();
-    }
-
-    async function getAddressFromCoords(lat, lng) {
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`);
-            const data = await res.json();
-            if (data && data.address) {
-                const a = data.address;
-                const city = a.city || a.town || a.village || a.county || '';
-                const road = a.road || a.pedestrian || '';
-                if (road && city) return `${road}, ${city}`;
-                if (city) return city;
-                if (road) return road;
-                if (data.display_name) return data.display_name.split(',').slice(0, 2).join(',');
-            }
-            return 'Избрана локация';
-        } catch { return 'Избрана локация'; }
-    }
-
-    async function searchAddressOnMap(query) {
-        if (!query) return;
-        initMainMap();
-        if (!map) return;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=bg&limit=1`);
-        const data = await res.json();
-        if (data && data.length > 0) {
-            const lat = parseFloat(data[0].lat);
-            const lng = parseFloat(data[0].lon);
-            const shortAddress = data[0].display_name.split(',').slice(0, 2).join(',');
-            map.flyTo([lat, lng], 12);
-            handleLocationSelection(lat, lng, shortAddress);
-        } else {
-            alert('Адресът не е намерен.');
-        }
-    }
-
-    async function searchAddressAndGoMap() {
-        const q = document.getElementById('createSearchInput').value.trim();
-        if (!q) return;
-        switchPage('home');
-        await searchAddressOnMap(q);
-    }
-
-    function handleLocationSelection(lat, lng, fetchedAddress = null) {
-        if (!map || typeof L === 'undefined') return;
-        if (pendingMarker) map.removeLayer(pendingMarker);
-        pendingMarker = new L.Marker([lat, lng], { icon: createPinIcon('#eab308') }).addTo(map);
-
-        (async () => {
-            const address = fetchedAddress || await getAddressFromCoords(lat, lng);
-            pendingLocationData = { lat, lng, address };
-            pendingMarker.bindPopup(`
-                <div style="font-size:13px; margin-bottom:6px;"><b>${esc(address)}</b></div>
-                <div style="margin-bottom:8px; color:#555;">Потвърждаваш ли точката?</div>
-                <button class="btn-yes" onclick="window.confirmLocation()">Да</button>
-                <button class="btn-no" onclick="window.cancelLocation()">Не</button>
-            `).openPopup();
-        })();
-    }
-
-    window.confirmLocation = function () {
-        if (!pendingLocationData || !map) return;
-        const { lat, lng, address } = pendingLocationData;
-        map.closePopup();
-        if (pendingMarker) { map.removeLayer(pendingMarker); pendingMarker = null; }
-        lastConfirmedPin = { lat, lng, address };
-
-        if (!pickupCoords || (pickupCoords && dropoffCoords)) {
-            tempMarkers.forEach(m => map.removeLayer(m));
-            tempMarkers = [];
-            draftStops = [];
-            renderStopsPreview();
-            pickupCoords = { lat, lng, name: address };
-            dropoffCoords = null;
-            tempMarkers.push(new L.Marker([lat, lng], { icon: createPinIcon('#10b981') }).addTo(map).bindPopup(`🟢 Начало: <b>${esc(address)}</b>`).openPopup());
-            document.getElementById('originName').value = address;
-            document.getElementById('destName').value = '';
-        } else {
-            dropoffCoords = { lat, lng, name: address };
-            tempMarkers.push(new L.Marker([lat, lng], { icon: createPinIcon('#ef4444') }).addTo(map).bindPopup(`🔴 Край: <b>${esc(address)}</b>`).openPopup());
-            document.getElementById('destName').value = address;
-            switchPage('create');
-        }
-    };
-
-    window.cancelLocation = function () {
-        if (pendingMarker && map) { map.removeLayer(pendingMarker); pendingMarker = null; }
-        pendingLocationData = null;
-    };
-
-    function addStopFromLastPin() {
-        const customName = document.getElementById('stopNameInput').value.trim();
-        const pin = lastConfirmedPin || dropoffCoords || pickupCoords;
-        if (!pin) { alert('Първо потвърди точка на картата.'); return; }
-        draftStops.push({ name: customName || pin.address || pin.name || 'Спирка', lat: pin.lat, lng: pin.lng });
-        document.getElementById('stopNameInput').value = '';
-        renderStopsPreview();
-    }
-
-    function renderStopsPreview() {
-        const el = document.getElementById('stopsPreview');
-        el.innerHTML = draftStops.length
-            ? draftStops.map((s, idx) => `<span class="badge badge-warn">${idx + 1}. ${esc(s.name)} <a href="#" onclick="removeDraftStop(${idx});return false;" style="margin-left:6px;color:inherit;text-decoration:none;">✕</a></span>`).join('')
-            : 'Няма добавени спирки.';
-    }
-
-    function removeDraftStop(idx) { draftStops.splice(idx, 1); renderStopsPreview(); }
-
-    async function drawRouteOnLayerGroup(ride, layerGroup, color = '#2563eb') {
-        if (typeof L === 'undefined' || !layerGroup) return;
-        layerGroup.clearLayers();
-        const waypoints = [
-            [ride.origin_lng, ride.origin_lat],
-            ...(ride.stops || []).map(s => [s.lng, s.lat]),
-            [ride.dest_lng, ride.dest_lat],
-        ];
-        const coordsParam = waypoints.map(p => `${p[0]},${p[1]}`).join(';');
-        try {
-            const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordsParam}?overview=full&geometries=geojson`);
-            const data = await res.json();
-            if (data.routes && data.routes.length > 0) {
-                const latLngs = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-                const poly = new L.Polyline(latLngs, { color, weight: 5, opacity: 0.85 }).addTo(layerGroup);
-                poly.on('click', () => openRideInspector(ride.id));
-            } else { throw new Error('No OSRM route'); }
-        } catch {
-            new L.Polyline(waypoints.map(p => [p[1], p[0]]), { color, weight: 4, dashArray: '6,8' }).addTo(layerGroup);
-        }
-
-        new L.Marker([ride.origin_lat, ride.origin_lng], { icon: createPinIcon('#10b981') }).addTo(layerGroup).bindPopup(`Начало: <b>${esc(ride.origin_name)}</b>`);
-        (ride.stops || []).forEach(st => {
-            new L.Marker([st.lat, st.lng], { icon: createPinIcon('#f59e0b') }).addTo(layerGroup).bindPopup(`Спирка: <b>${esc(st.name)}</b>`);
-        });
-        new L.Marker([ride.dest_lat, ride.dest_lng], { icon: createPinIcon('#ef4444') }).addTo(layerGroup).bindPopup(`Край: <b>${esc(ride.dest_name)}</b>`);
-    }
-
-    // --- RIDES & SEARCH ---
-    async function fetchRides() {
-        const res = await fetch('/api/rides');
-        const rides = await res.json();
-        allRidesCache = rides;
-        renderHomeRides(rides);
-        if (document.getElementById('searchPage').classList.contains('active')) renderSearchResults(rides);
-    }
-
-    function renderHomeRides(rides) {
-        const listEl = document.getElementById('homeRidesList');
-        if (!listEl) return;
-        if (routeLayers) routeLayers.clearLayers();
-        if (!rides || !rides.length) {
-            listEl.innerHTML = '<p class="hint">Няма активни пътувания. Отвори страница <b>Създаване</b>.</p>';
-            return;
-        }
-        listEl.innerHTML = rides.map(r => {
-            const stopsText = (r.stops && r.stops.length) ? ` · Спирки: ${r.stops.map(s => esc(s.name)).join(', ')}` : '';
-            return `
-                <div class="ride-item">
-                    <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
-                    <div>
-                        <span class="badge badge-price">${Number(r.price_per_seat).toFixed(2)} лв.</span>
-                        <span class="badge badge-seats">${r.available_seats} свободни</span>
-                    </div>
-                    <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b>${stopsText}</div>
-                    <button class="btn btn-primary btn-sm" onclick="openRideInspector(${r.id})">Карта и резервация</button>
-                </div>
-            `;
-        }).join('');
-        if (routeLayers && rides[0]) drawRouteOnLayerGroup(rides[0], routeLayers, '#2563eb');
-    }
-
-    async function runSearch() {
-        const origin = document.getElementById('searchOrigin').value.trim();
-        const destination = document.getElementById('searchDest').value.trim();
-        const minSeats = parseInt(document.getElementById('searchMinSeats').value, 10) || 1;
-        const params = new URLSearchParams();
-        if (origin) params.set('origin', origin);
-        if (destination) params.set('destination', destination);
-        if (minSeats > 1) params.set('min_seats', String(minSeats));
-        const res = await fetch(`/api/rides?${params.toString()}`);
-        renderSearchResults(await res.json());
-    }
-
-    function resetSearch() {
-        document.getElementById('searchOrigin').value = '';
-        document.getElementById('searchDest').value = '';
-        document.getElementById('searchMinSeats').value = '1';
-        renderSearchResults(allRidesCache);
-    }
-
-    function renderSearchResults(rides) {
-        const container = document.getElementById('searchResultsList');
-        if (!rides || !rides.length) {
-            container.innerHTML = '<div class="card"><p class="hint">Няма намерени пътувания.</p></div>';
-            return;
-        }
-        container.innerHTML = rides.map(r => {
-            const stopsBadge = (r.stops && r.stops.length)
-                ? `<div class="ride-meta">Междинни точки: <b>${r.stops.map(s => esc(s.name)).join(' → ')}</b></div>`
-                : '';
-            return `
-                <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <div>
-                            <div class="ride-route">🟢 ${esc(r.origin_name)} → 🔴 ${esc(r.dest_name)}</div>
-                            <div>
-                                <span class="badge badge-price">от ${Number(r.price_per_seat).toFixed(2)} лв.</span>
-                                <span class="badge badge-seats">${r.available_seats} свободни места</span>
-                            </div>
-                            ${stopsBadge}
-                            <div class="ride-meta">Шофьор: <b>${esc(r.driver_name)}</b></div>
-                        </div>
-                        <button class="btn btn-primary" onclick="openRideInspector(${r.id})">🗺️ Виж на картата</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    // --- POPUP MAP INSPECTOR & BOOKING (REQUIRES PROFILE) ---
-    async function openRideInspector(rideId) {
-        const ride = allRidesCache.find(r => r.id === rideId);
-        if (!ride) return;
-        document.getElementById('inspectorTitle').textContent = `${ride.origin_name} → ${ride.dest_name}`;
-        document.getElementById('rideInspectorModal').classList.add('open');
-
-        if (inspectorMap) { inspectorMap.remove(); inspectorMap = null; inspectorLayers = null; }
-
-        setTimeout(async () => {
-            inspectorMap = createBaseMap('inspectorMap', [ride.origin_lat, ride.origin_lng], 7);
-            if (inspectorMap && typeof L !== 'undefined') {
-                inspectorLayers = new L.LayerGroup().addTo(inspectorMap);
-                inspectorMap.invalidateSize();
-                inspectorMap.fitBounds([[ride.origin_lat, ride.origin_lng], [ride.dest_lat, ride.dest_lng]], { padding: [30, 30] });
-                await drawRouteOnLayerGroup(ride, inspectorLayers, '#2563eb');
-            }
-        }, 80);
-
-        const points = [
-            { label: ride.origin_name, ratio: 0.0 },
-            ...(ride.stops || []).map(s => ({ label: s.name, ratio: Number(s.ratio ?? 0.5) })),
-            { label: ride.dest_name, ratio: 1.0 },
-        ];
-        const pointOptions = points.map((p, idx) =>
-            `<option value="${idx}" data-ratio="${p.ratio}" data-label="${esc(p.label)}">${esc(p.label)} (${Math.round(p.ratio * 100)}%)</option>`
-        ).join('');
-        const paxList = (ride.passengers || []).map(p =>
-            `<li>${esc(p.name)} (${p.seats} м.) — <b>${esc(p.segment_start_label)} → ${esc(p.segment_end_label)}</b></li>`
-        ).join('');
-
-        const bookingFormHtml = currentUser ? `
-            <div class="segment-box">
-                <div style="font-weight:700; font-size:14px; margin-bottom:8px;">Запази места (резервирано за профил: <b>${esc(currentUser.full_name)}</b>)</div>
-                <div class="row">
-                    <div class="form-group"><label>Качване от</label><select id="segStartSelect" onchange="updateSegmentPricePreview(${ride.id})">${pointOptions}</select></div>
-                    <div class="form-group"><label>Слизане до</label><select id="segEndSelect" onchange="updateSegmentPricePreview(${ride.id})">${pointOptions}</select></div>
-                </div>
-                <div class="row">
-                    <div class="form-group"><label>Брой места</label><input type="number" id="segSeats" value="1" min="1" max="${Math.max(1, ride.available_seats)}" onchange="updateSegmentPricePreview(${ride.id})"></div>
-                </div>
-                <div id="segPricePreview" style="font-weight:700; color:var(--primary); margin-bottom:10px;"></div>
-                <button class="btn btn-primary" onclick="submitSegmentBooking(${ride.id})">Запази места</button>
+      <div class="cards-3">
+        <article class="card">
+          <div class="review-stars">★★★★★</div>
+          <p>„Пътувам всяка седмица София – Варна. С Vozia намирам коректни спътници за часове и покривам почти изцяло горивото и винетката.“</p>
+          <div class="review-author">
+            <div class="avatar">ГП</div>
+            <div>
+              <strong>Георги Петров</strong>
+              <div style="font-size:0.82rem; color:var(--slate-500);">Шофьор · 42 пътувания</div>
             </div>
-        ` : `
-            <div class="auth-notice">
-                <b>Само потребители с профил могат да запазват места.</b>
-                <div style="margin-top:8px;">
-                    <button class="btn btn-primary btn-sm" onclick="closeInspectorModal(); switchPage('profile');">Към вход / регистрация</button>
-                </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="review-stars">★★★★★</div>
+          <p>„Най-после модерен български сайт, който не прилича на форум от 2005-а. Картата зарежда светкавично и веднага виждам колко време е пътят.“</p>
+          <div class="review-author">
+            <div class="avatar">МД</div>
+            <div>
+              <strong>Мария Димитрова</strong>
+              <div style="font-size:0.82rem; color:var(--slate-500);">Пътник · Пловдив</div>
             </div>
-        `;
+          </div>
+        </article>
 
-        document.getElementById('inspectorBody').innerHTML = `
-            <div style="margin-bottom:10px;">
-                <span class="badge badge-price">Базова цена: ${Number(ride.price_per_seat).toFixed(2)} лв.</span>
-                <span class="badge badge-seats">Свободни: ${ride.available_seats}/${ride.total_seats}</span>
-                <span style="font-size:13px; color:var(--text-muted);">Шофьор: <b>${esc(ride.driver_name)}</b></span>
+        <article class="card">
+          <div class="review-stars">★★★★★</div>
+          <p>„Филтрите за климатик, багаж и без пушене са супер полезни. Резервирах за Бургас за 30 секунди и се уговорихме в чата.“</p>
+          <div class="review-author">
+            <div class="avatar">НК</div>
+            <div>
+              <strong>Николай Колев</strong>
+              <div style="font-size:0.82rem; color:var(--slate-500);">Пътник · София</div>
             </div>
-            ${paxList ? `<div class="ride-meta"><b>Резервации:</b><ul style="margin:4px 0 8px 18px;">${paxList}</ul></div>` : ''}
-            ${bookingFormHtml}
-        `;
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
 
-        if (currentUser) {
-            const endSel = document.getElementById('segEndSelect');
-            if (endSel && endSel.options.length > 1) endSel.selectedIndex = endSel.options.length - 1;
-            updateSegmentPricePreview(ride.id);
-        }
-    }
+  <!-- FAQ -->
+  <section class="section section-muted" id="faq">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-eyebrow">Често задавани въпроси</span>
+        <h2>Имаш въпроси? Ето отговорите.</h2>
+      </div>
 
-    function updateSegmentPricePreview(rideId) {
-        const ride = allRidesCache.find(r => r.id === rideId);
-        if (!ride) return;
-        const startOpt = document.getElementById('segStartSelect')?.selectedOptions?.[0];
-        const endOpt = document.getElementById('segEndSelect')?.selectedOptions?.[0];
-        const seats = Math.max(1, parseInt(document.getElementById('segSeats')?.value || '1', 10));
-        const previewEl = document.getElementById('segPricePreview');
-        if (!startOpt || !endOpt || !previewEl) return;
+      <div class="faq-list">
+        <div class="faq-item open">
+          <button class="faq-question" type="button">
+            Безплатно ли е ползването на Vozia?
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            Да. Регистрацията, търсенето и публикуването на пътувания във Vozia са напълно безплатни, без скрити такси за пътници или шофьори.
+          </div>
+        </div>
 
-        const sRatio = parseFloat(startOpt.dataset.ratio || '0');
-        const eRatio = parseFloat(endOpt.dataset.ratio || '1');
-        if (eRatio <= sRatio + 1e-4) { previewEl.textContent = '⚠️ Крайната точка трябва да е след началната.'; return; }
-        const span = eRatio - sRatio;
-        const factor = span >= 0.97 ? 1.0 : Math.max(0.15, Number(span.toFixed(2)));
-        previewEl.textContent = `Участък: ${startOpt.dataset.label} → ${endOpt.dataset.label} · Цена: ${(ride.price_per_seat * factor * seats).toFixed(2)} лв.`;
-    }
+        <div class="faq-item">
+          <button class="faq-question" type="button">
+            Защо трябва да вляза в профил, за да използвам приложението?
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            За да гарантираме сигурността на общността, достъпът до активните пътувания, резервациите и чата с шофьори изисква активен профил. Регистрацията отнема по-малко от 20 секунди.
+          </div>
+        </div>
 
-    async function submitSegmentBooking(rideId) {
-        if (!currentUser) {
-            alert('Трябва да си влязъл в профил, за да запазиш място.');
-            return;
-        }
-        const startOpt = document.getElementById('segStartSelect').selectedOptions[0];
-        const endOpt = document.getElementById('segEndSelect').selectedOptions[0];
-        const seatsBooked = parseInt(document.getElementById('segSeats').value || '1', 10);
+        <div class="faq-item">
+          <button class="faq-question" type="button">
+            Как се определя цената на едно място?
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            Шофьорът задава справедлива цена на място, която помага за поделяне на реалните разходи за гориво. Цената се вижда ясно преди резервация.
+          </div>
+        </div>
 
-        const res = await fetch(`/api/rides/${rideId}/book`, {
-            method: 'POST',
-            headers: authHeaders(),
-            body: JSON.stringify({
-                seats_booked: seatsBooked,
-                segment_start_label: startOpt.dataset.label,
-                segment_end_label: endOpt.dataset.label,
-                segment_start_ratio: parseFloat(startOpt.dataset.ratio),
-                segment_end_ratio: parseFloat(endOpt.dataset.ratio),
-            }),
-        });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Грешка при резервация.'); return; }
-        alert(data.message || 'Резервацията е успешна!');
-        closeInspectorModal();
-        await fetchRides();
-        refreshCurrentUser();
-    }
+        <div class="faq-item">
+          <button class="faq-question" type="button">
+            Мога ли да отменя резервация или публикувано пътуване?
+            <span class="faq-icon">+</span>
+          </button>
+          <div class="faq-answer">
+            Разбира се. В секция „Моите пътувания“ можеш да отмениш своята резервация (местата веднага се освобождават автоматично) или да свалиш обява.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    function closeInspectorModal() {
-        document.getElementById('rideInspectorModal').classList.remove('open');
-        if (inspectorMap) { inspectorMap.remove(); inspectorMap = null; inspectorLayers = null; }
-    }
+  <!-- Final CTA -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-banner">
+        <h2>Готов ли си за следващото си пътуване?</h2>
+        <p>Влез в приложението на Vozia, разгледай свободните места на картата или сподели своя маршрут още днес.</p>
+        <div class="cta-actions">
+          <a href="app.html" class="btn btn-primary btn-lg">Влез в приложението</a>
+          <a href="app.html?intent=publish" class="btn btn-outline btn-lg">Предложи пътуване</a>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    async function createRide() {
-        document.querySelectorAll('.error-input').forEach(el => el.classList.remove('error-input'));
-        document.querySelectorAll('.error-msg').forEach(el => el.style.display = 'none');
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <a href="index.html" class="brand" style="color:#ffffff; margin-bottom:14px;">
+            <span class="brand-mark">
+              <svg width="34" height="34" viewBox="0 0 40 40" fill="none">
+                <rect width="40" height="40" rx="12" fill="#059669"/>
+                <path d="M11 12.5L20 29.5L29 12.5" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="20" cy="13.5" r="2.6" fill="#d1fae5"/>
+              </svg>
+            </span>
+            Vozia
+          </a>
+          <p style="font-size:0.9rem; color:var(--slate-400); max-width:300px;">
+            Модерна българска платформа за споделено пътуване между градовете. По-икономично, по-зелено, по-удобно.
+          </p>
+        </div>
 
-        const driverName = document.getElementById('driverName').value.trim();
-        const originName = document.getElementById('originName').value.trim();
-        const destName = document.getElementById('destName').value.trim();
-        const availableSeats = parseInt(document.getElementById('seats').value, 10);
-        const priceText = document.getElementById('price').value;
-        const pricePerSeat = parseFloat(priceText);
+        <div>
+          <h4>Платформа</h4>
+          <ul class="footer-links">
+            <li><a href="app.html">Търси пътуване</a></li>
+            <li><a href="app.html?intent=publish">Предложи пътуване</a></li>
+            <li><a href="#calculator">Калкулатор</a></li>
+            <li><a href="#safety">Сигурност</a></li>
+          </ul>
+        </div>
 
-        let valid = true;
-        if (!driverName) { document.getElementById('driverName').classList.add('error-input'); document.getElementById('err-driverName').style.display = 'block'; valid = false; }
-        if (!pickupCoords) { document.getElementById('originName').classList.add('error-input'); document.getElementById('err-originName').style.display = 'block'; valid = false; }
-        if (!dropoffCoords) { document.getElementById('destName').classList.add('error-input'); document.getElementById('err-destName').style.display = 'block'; valid = false; }
-        if (isNaN(pricePerSeat) || pricePerSeat < 0 || priceText === '') { document.getElementById('price').classList.add('error-input'); document.getElementById('err-price').style.display = 'block'; valid = false; }
-        if (!valid) return;
+        <div>
+          <h4>Топ маршрути</h4>
+          <ul class="footer-links">
+            <li><a href="app.html?from=София&to=Варна">София – Варна</a></li>
+            <li><a href="app.html?from=София&to=Пловдив">София – Пловдив</a></li>
+            <li><a href="app.html?from=София&to=Бургас">София – Бургас</a></li>
+            <li><a href="app.html?from=Варна&to=Бургас">Варна – Бургас</a></li>
+          </ul>
+        </div>
 
-        const res = await fetch('/api/rides', {
-            method: 'POST', headers: authHeaders(),
-            body: JSON.stringify({
-                driver_name: driverName, origin_name: originName, dest_name: destName,
-                origin_lat: pickupCoords.lat, origin_lng: pickupCoords.lng,
-                dest_lat: dropoffCoords.lat, dest_lng: dropoffCoords.lng,
-                stops: draftStops, available_seats: availableSeats, price_per_seat: pricePerSeat,
-            }),
-        });
-        const data = await res.json();
-        if (!res.ok) { alert(data.detail || 'Грешка при публикуване.'); return; }
+        <div>
+          <h4>Контакти</h4>
+          <ul class="footer-links">
+            <li>support@vozia.bg</li>
+            <li>Варна &amp; София, България</li>
+            <li>Денонощна онлайн поддръжка</li>
+          </ul>
+        </div>
+      </div>
 
-        if (map) tempMarkers.forEach(m => map.removeLayer(m));
-        tempMarkers = []; pickupCoords = null; dropoffCoords = null; draftStops = []; lastConfirmedPin = null;
-        renderStopsPreview();
-        document.getElementById('originName').value = ''; document.getElementById('destName').value = ''; document.getElementById('price').value = '';
-        await fetchRides();
-        if (authToken) refreshCurrentUser();
-        switchPage('home');
-    }
+      <div class="footer-bottom">
+        <span>© 2026 Vozia Mobility Ltd. Всички права запазени.</span>
+        <span>Карти: OpenFreeMap &amp; Esri World Map</span>
+      </div>
+    </div>
+  </footer>
 
-    let wsInstance = null;
-    function connectWs() {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsInstance = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
-        wsInstance.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.event === 'rides_updated') {
-                    fetchRides();
-                    if (document.getElementById('adminPage').classList.contains('active')) loadAdminRides();
-                    if (document.getElementById('profilePage').classList.contains('active')) loadProfile();
-                }
-            } catch {}
-        };
-        wsInstance.onclose = () => setTimeout(connectWs, 3000);
-    }
-
-    initMainMap();
-    refreshCurrentUser();
-    fetchRides();
-    connectWs();
-</script>
+  <script src="js/data.js"></script>
+  <script src="js/landing.js"></script>
 </body>
 </html>
